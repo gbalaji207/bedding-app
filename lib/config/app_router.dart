@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:voting_app/screens/matches/match_form_screen.dart';
 import 'package:voting_app/screens/voting/voting_details_screen.dart';
 import 'package:voting_app/screens/voting/voting_screen.dart';
+import 'package:voting_app/screens/profile/profile_screen.dart';
+import 'package:voting_app/screens/profile/change_password_screen.dart';
 import 'package:voting_app/viewmodels/vote_details_view_model.dart';
 
 import '../providers/auth_provider.dart';
@@ -57,6 +59,8 @@ class AppRouter {
             title = 'Points Table';
           } else if (location == AppRoutes.voting) {
             title = 'Vote for Matches';
+          } else if (location == AppRoutes.profile) {
+            title = 'My Profile';
           }
 
           // Update to not pass appState directly
@@ -93,6 +97,11 @@ class AppRouter {
             path: AppRoutes.voting,
             name: AppRoutes.votingName,
             builder: (context, state) => const VotingScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.profile,
+            name: AppRoutes.profileName,
+            builder: (context, state) => const ProfileScreen(),
           ),
         ],
       ),
@@ -143,17 +152,28 @@ class AppRouter {
           );
         },
       ),
+      // Change password route
+      GoRoute(
+        path: AppRoutes.changePassword,
+        name: AppRoutes.changePasswordName,
+        builder: (context, state) => const ChangePasswordScreen(),
+      ),
     ],
     redirect: (context, state) {
       final isLoggedIn = appState.isLoggedIn;
       final isLoggingIn = state.matchedLocation == AppRoutes.login;
+
+      // Skip redirection for change password screen
+      if (state.matchedLocation == AppRoutes.changePassword) {
+        return null;
+      }
 
       if (!isLoggedIn && !isLoggingIn) {
         return AppRoutes.login;
       }
 
       if (isLoggedIn && isLoggingIn) {
-        return AppRoutes.dashboard;
+        return AppRoutes.voting; // Direct users to the voting screen after login
       }
 
       return null;

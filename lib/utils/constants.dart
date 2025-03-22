@@ -11,8 +11,10 @@ class AppRoutes {
   static const String matchDetails = '/matches/details/:matchId'; // Path pattern with parameter
   static const String results = '/results';
   static const String points = '/points';
-  static const String voting = '/voting'; // New route for voting
-  static const String votingDetails = '/voting/details/:matchId'; // New route for voting details
+  static const String voting = '/voting'; // Route for voting
+  static const String votingDetails = '/voting/details/:matchId'; // Route for voting details
+  static const String profile = '/profile'; // Route for user profile
+  static const String changePassword = '/profile/change-password'; // Route for changing password
 
   // Route name constants
   static const String loginName = 'login';
@@ -22,8 +24,10 @@ class AppRoutes {
   static const String matchDetailsName = 'matchDetails';
   static const String resultsName = 'results';
   static const String pointsName = 'points';
-  static const String votingName = 'voting'; // New route name for voting
-  static const String votingDetailsName = 'votingDetails'; // New route name for voting details
+  static const String votingName = 'voting'; // Route name for voting
+  static const String votingDetailsName = 'votingDetails'; // Route name for voting details
+  static const String profileName = 'profile'; // Route name for user profile
+  static const String changePasswordName = 'changePassword'; // Route name for changing password
 
   // Helper methods for routes with parameters
   static String buildMatchDetailsPath(String matchId) => '/matches/details/$matchId';

@@ -19,6 +19,9 @@ class AppState extends ChangeNotifier {
   UserProfile? get userProfile => _userProfile;
   String? get userRole => _userProfile?.userRole;
 
+  // Flag to control navigation behavior when auth state changes
+  bool _shouldHandleNavigation = true;
+
   AppState() {
     // Check if user is already authenticated
     _user = supabase.auth.currentUser;
@@ -101,7 +104,7 @@ class AppState extends ChangeNotifier {
   }
 
   // Update user's display name
-  Future<void> updateDisplayName(String displayName) async {
+  Future<void> updateDisplayName(String displayName, {bool shouldNavigate = true}) async {
     if (_user == null) return;
 
     _isLoading = true;
@@ -211,5 +214,46 @@ class AppState extends ChangeNotifier {
   void resetLoadingState() {
     _isLoading = false;
     notifyListeners();
+  }
+
+  // Update user password
+  Future<void> updatePassword(String currentPassword, String newPassword, {bool shouldNavigate = true}) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // First verify current password by attempting to sign in
+      final email = _user?.email;
+      if (email == null) {
+        throw Exception('Unable to update password: User email not found');
+      }
+
+      // Verify current password by attempting to sign in
+      try {
+        await supabase.auth.signInWithPassword(
+          email: email,
+          password: currentPassword,
+        );
+      } catch (e) {
+        throw Exception('Current password is incorrect');
+      }
+
+      // If sign-in succeeded, update password
+      await supabase.auth.updateUser(
+        UserAttributes(
+          password: newPassword,
+        ),
+      );
+
+      _error = null;
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      rethrow; // Re-throw to handle in the UI
+    }
   }
 }

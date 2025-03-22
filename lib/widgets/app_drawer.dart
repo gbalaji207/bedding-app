@@ -74,6 +74,14 @@ class AppDrawer extends StatelessWidget {
               Navigator.pop(context); // Close drawer
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('My Profile'),
+            onTap: () {
+              context.goNamed(AppRoutes.profileName);
+              Navigator.pop(context); // Close drawer
+            },
+          ),
 
           // Admin section - shown only to admin users
           if (appState.userRole == 'admin') ...[
