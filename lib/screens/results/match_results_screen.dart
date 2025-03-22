@@ -1,7 +1,6 @@
 // lib/screens/results/match_results_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/match_model.dart';
@@ -10,6 +9,7 @@ import '../../repositories/match_repository.dart';
 import '../../repositories/vote_repository.dart';
 import '../../utils/constants.dart';
 import '../../viewmodels/vote_details_view_model.dart';
+import '../../models/vote_model.dart';
 
 class MatchResultsScreen extends StatefulWidget {
   const MatchResultsScreen({Key? key}) : super(key: key);
@@ -20,6 +20,7 @@ class MatchResultsScreen extends StatefulWidget {
 
 class _MatchResultsScreenState extends State<MatchResultsScreen> {
   List<Match> _pastMatches = [];
+  Map<String, Vote> _userVotes = {}; // matchId -> Vote object
   bool _isLoading = true;
   String _errorMessage = '';
 
@@ -37,9 +38,22 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
 
     try {
       final matchRepository = Provider.of<MatchRepository>(context, listen: false);
+      final voteRepository = Provider.of<VoteRepository>(context, listen: false);
+      final appState = Provider.of<AppState>(context, listen: false);
 
       // Get past matches directly from the database
       _pastMatches = await matchRepository.getPastMatches();
+
+      // Load user votes if user is logged in
+      if (appState.user != null) {
+        final votes = await voteRepository.getUserVotes(appState.user!.id);
+
+        // Create a map of matchId -> Vote object
+        _userVotes = {
+          for (var vote in votes)
+            vote.matchId: vote
+        };
+      }
 
       setState(() {
         _isLoading = false;
@@ -103,18 +117,13 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
   }
 
   Widget _buildMatchCard(BuildContext context, Match match) {
-    // Choose a color based on the match status
-    Color statusColor;
-    switch (match.status) {
-      case MatchStatus.live:
-        statusColor = Colors.green;
-        break;
-      case MatchStatus.finished:
-        statusColor = Colors.blue;
-        break;
-      default:
-        statusColor = Colors.orange;
-    }
+    // Check if user voted for this match
+    final vote = _userVotes[match.id];
+    final hasVoted = vote != null;
+    final userVote = hasVoted ? vote!.vote : null;
+
+    // Check if match is finished
+    final isFinished = match.status == MatchStatus.finished;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
@@ -128,36 +137,18 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      match.title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusColor,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      match.status.toString().split('.').last.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
+              // Title with match type
+              Text(
+                '${match.title} - ${match.type == MatchType.fixed ? 'Fixed' : 'Variable'}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 12),
+
+              // Team vs Team
               Row(
                 children: [
                   Expanded(
@@ -166,11 +157,22 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
                       decoration: BoxDecoration(
                         color: Colors.blue.shade100,
                         borderRadius: BorderRadius.circular(8),
+                        // Highlight the team if user voted for it
+                        border: Border.all(
+                          color: hasVoted && vote!.vote == match.team1
+                              ? Colors.blue
+                              : Colors.transparent,
+                          width: 2,
+                        ),
                       ),
                       child: Text(
                         match.team1,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: hasVoted && vote!.vote == match.team1
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
                       ),
                     ),
                   ),
@@ -189,36 +191,95 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
                       decoration: BoxDecoration(
                         color: Colors.orange.shade100,
                         borderRadius: BorderRadius.circular(8),
+                        // Highlight the team if user voted for it
+                        border: Border.all(
+                          color: hasVoted && vote!.vote == match.team2
+                              ? Colors.orange
+                              : Colors.transparent,
+                          width: 2,
+                        ),
                       ),
                       child: Text(
                         match.team2,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontWeight: hasVoted && vote!.vote == match.team2
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
+
+              // Bottom row with vote info and points
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    DateFormat('MMM dd, yyyy - h:mm a').format(match.startDate),
-                    style: TextStyle(
-                      color: Colors.grey[600],
+                  // Show points if match is finished and user voted
+                  if (isFinished && hasVoted)
+                    _buildPointsIndicator(match, userVote),
+
+                  // Show voted team if user casted a vote (align right)
+                  if (hasVoted)
+                    Chip(
+                      label: Text('You voted: ${vote!.vote}'),
+                      backgroundColor: vote.vote == match.team1
+                          ? Colors.blue.shade100
+                          : Colors.orange.shade100,
+                      labelStyle: TextStyle(
+                        color: vote.vote == match.team1
+                            ? Colors.blue.shade800
+                            : Colors.orange.shade800,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const Chip(
-                    label: Text('View Results'),
-                    backgroundColor: Colors.blue,
-                    labelStyle: TextStyle(color: Colors.white),
-                  ),
                 ],
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPointsIndicator(Match match, String? userVote) {
+    // Get the vote object for this match
+    final vote = _userVotes[match.id];
+    if (vote == null) return const SizedBox();
+
+    // Get the vote status and points from the Vote object
+    final wonVote = vote.status == 'won';
+    final points = vote.points;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: wonVote ? Colors.green.shade100 : Colors.red.shade100,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: wonVote ? Colors.green : Colors.red,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            wonVote ? Icons.check_circle : Icons.cancel,
+            size: 16,
+            color: wonVote ? Colors.green : Colors.red,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            wonVote ? '+$points pts' : '0 pts',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: wonVote ? Colors.green.shade800 : Colors.red.shade800,
+            ),
+          ),
+        ],
       ),
     );
   }

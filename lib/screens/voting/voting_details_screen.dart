@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../../models/match_model.dart';
 import '../../models/vote_details_model.dart';
+import '../../models/user_profile.dart';
+import '../../models/vote_model.dart';
 import '../../viewmodels/vote_details_view_model.dart';
 
 class VotingDetailsScreen extends StatefulWidget {
@@ -20,6 +22,10 @@ class VotingDetailsScreen extends StatefulWidget {
 }
 
 class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
+  // State variable to track all users for fixed matches
+  List<UserProfile> _allUsers = [];
+  bool _isLoadingUsers = false;
+
   @override
   void initState() {
     super.initState();
@@ -33,37 +39,69 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
     final viewModel = Provider.of<VoteDetailsViewModel>(context, listen: false);
     await viewModel.loadMatch(widget.matchId);
     await viewModel.loadMatchVotes(widget.matchId);
+
+    // For fixed matches, load all users
+    if (viewModel.match?.type == MatchType.fixed) {
+      await _loadAllUsers();
+    }
+  }
+
+  // Method to load all users from the database
+  Future<void> _loadAllUsers() async {
+    setState(() {
+      _isLoadingUsers = true;
+    });
+
+    try {
+      final viewModel = Provider.of<VoteDetailsViewModel>(context, listen: false);
+      // Use the viewModel to fetch all users
+      _allUsers = await viewModel.getAllUsers();
+    } catch (e) {
+      debugPrint('Error loading all users: $e');
+    } finally {
+      setState(() {
+        _isLoadingUsers = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<VoteDetailsViewModel>(
       builder: (context, viewModel, child) {
-        if (viewModel.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+        if (viewModel.isLoading || _isLoadingUsers) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         if (viewModel.errorMessage.isNotEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Error: ${viewModel.errorMessage}',
-                  style: const TextStyle(color: Colors.red),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _loadData,
-                  child: const Text('Retry'),
-                ),
-              ],
+          return Scaffold(
+            appBar: AppBar(title: const Text('Error')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Error: ${viewModel.errorMessage}',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _loadData,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
           );
         }
 
         if (viewModel.match == null) {
-          return const Center(child: Text('Match not found'));
+          return Scaffold(
+            appBar: AppBar(title: const Text('Match Not Found')),
+            body: const Center(child: Text('Match not found')),
+          );
         }
 
         // Check if voting is closed using the Match model
@@ -74,7 +112,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
         if (!votingClosed) {
           return Scaffold(
             appBar: AppBar(
-              title: Text('${match.title}'),
+              title: Text(match.title),
               elevation: 0,
             ),
             body: Center(
@@ -132,10 +170,20 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
   Widget _buildContent(VoteDetailsViewModel viewModel) {
     final match = viewModel.match!;
     final votes = viewModel.voteDetails;
+    final isFixedMatch = match.type == MatchType.fixed;
+
+    // For fixed matches, we need to consider all users
+    // For variable matches, we only consider users who voted but still sort them
+    final List<VoteDetails> effectiveVotes = isFixedMatch
+        ? _getEffectiveVotesForFixedMatch(votes, match)
+        : _sortVotesForVariableMatch(votes, match);
 
     // Count votes for each team
-    final team1Votes = votes.where((v) => v.vote.vote == match.team1).length;
-    final team2Votes = votes.where((v) => v.vote.vote == match.team2).length;
+    final team1Votes = effectiveVotes.where((v) => v.vote.vote == match.team1).length;
+    final team2Votes = effectiveVotes.where((v) => v.vote.vote == match.team2).length;
+
+    // For fixed matches, count non-voters too
+    final nonVoters = isFixedMatch ? _allUsers.length - votes.length : 0;
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -150,15 +198,97 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
             const SizedBox(height: 24),
 
             // Vote summary
-            _buildVoteSummary(match, team1Votes, team2Votes),
+            _buildVoteSummary(match, team1Votes, team2Votes, nonVoters),
             const SizedBox(height: 20),
 
             // Votes list
-            _buildVotesList(viewModel, match),
+            _buildVotesList(match, effectiveVotes),
           ],
         ),
       ),
     );
+  }
+
+  // Helper method to create effective votes list for fixed matches (including non-voters)
+  List<VoteDetails> _getEffectiveVotesForFixedMatch(List<VoteDetails> actualVotes, Match match) {
+    // Create a map of userId -> VoteDetails to check if a user has voted
+    final Map<String, VoteDetails> votesByUserId = {
+      for (var vote in actualVotes) vote.vote.userId: vote
+    };
+
+    // Create a list of "virtual" votes for users who didn't vote
+    final List<VoteDetails> allVotes = List.from(actualVotes);
+
+    // Add entries for users who didn't vote
+    for (var user in _allUsers) {
+      if (!votesByUserId.containsKey(user.id)) {
+        // Create a "non-vote" entry
+        allVotes.add(
+          VoteDetails(
+            vote: Vote(
+              id: 'no-vote-${user.id}',
+              userId: user.id,
+              matchId: match.id,
+              vote: 'Did not vote',
+              status: 'non-voter',
+            ),
+            userProfile: user,
+          ),
+        );
+      }
+    }
+
+    // Sort the list:
+    // 1. Team1 voters first
+    // 2. Team2 voters second
+    // 3. Non-voters last
+    // 4. Within each group, sort alphabetically by display name
+    final team1 = match.team1;
+    final team2 = match.team2;
+
+    allVotes.sort((a, b) {
+      // First determine category for each vote (team1, team2, or non-voter)
+      int getCategoryValue(VoteDetails vote) {
+        if (vote.vote.status == 'non-voter') return 2; // Non-voters last
+        if (vote.vote.vote == team1) return 0; // Team1 first
+        return 1; // Team2 second
+      }
+
+      final aCat = getCategoryValue(a);
+      final bCat = getCategoryValue(b);
+
+      // If categories are different, sort by category
+      if (aCat != bCat) {
+        return aCat.compareTo(bCat);
+      }
+
+      // If categories are the same, sort alphabetically by display name
+      return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+    });
+
+    return allVotes;
+  }
+
+  // Helper method to sort votes for variable matches (team1 then team2)
+  List<VoteDetails> _sortVotesForVariableMatch(List<VoteDetails> votes, Match match) {
+    final team1 = match.team1;
+    final sortedVotes = List<VoteDetails>.from(votes);
+
+    // Sort by team (team1 first, team2 second) and then alphabetically by name
+    sortedVotes.sort((a, b) {
+      // First sort by team (team1 first, team2 second)
+      if (a.vote.vote == team1 && b.vote.vote != team1) {
+        return -1; // a is team1, b is not team1
+      }
+      if (a.vote.vote != team1 && b.vote.vote == team1) {
+        return 1; // a is not team1, b is team1
+      }
+
+      // If same team, sort alphabetically by name
+      return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+    });
+
+    return sortedVotes;
   }
 
   Widget _buildMatchHeader(Match match) {
@@ -209,10 +339,22 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
     );
   }
 
-  Widget _buildVoteSummary(Match match, int team1Votes, int team2Votes) {
-    final totalVotes = team1Votes + team2Votes;
-    final team1Percentage = totalVotes > 0 ? (team1Votes / totalVotes) * 100 : 0.0;
-    final team2Percentage = totalVotes > 0 ? (team2Votes / totalVotes) * 100 : 0.0;
+  Widget _buildVoteSummary(Match match, int team1Votes, int team2Votes, int nonVoters) {
+    final totalVoters = team1Votes + team2Votes;
+    final totalUsers = totalVoters + nonVoters;
+
+    // Calculate percentages based on total users (for fixed matches) or total votes (for variable)
+    final denominatorForPercentage = match.type == MatchType.fixed ? totalUsers : totalVoters;
+
+    final team1Percentage = denominatorForPercentage > 0
+        ? (team1Votes / denominatorForPercentage) * 100
+        : 0.0;
+    final team2Percentage = denominatorForPercentage > 0
+        ? (team2Votes / denominatorForPercentage) * 100
+        : 0.0;
+    final nonVotersPercentage = denominatorForPercentage > 0
+        ? (nonVoters / denominatorForPercentage) * 100
+        : 0.0;
 
     // Check if match has started to adjust the UI
     final now = DateTime.now();
@@ -235,63 +377,155 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
             ),
             const SizedBox(height: 16),
 
-            Row(
-              children: [
-                // Team 1
-                Expanded(
-                  flex: team1Votes > 0 ? team1Votes : 1,
-                  child: Container(
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.blue,
-                      borderRadius: BorderRadius.horizontal(
-                        left: const Radius.circular(4),
-                        right: team2Votes == 0 ? const Radius.circular(4) : Radius.zero,
+            // Show different chart for fixed vs variable matches
+            if (match.type == MatchType.fixed) ...[
+              // For fixed matches, show a chart that includes non-voters
+              Row(
+                children: [
+                  // Team 1
+                  Expanded(
+                    flex: team1Votes > 0 ? team1Votes : 1,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.horizontal(
+                          left: const Radius.circular(4),
+                          right: team2Votes == 0 && nonVoters == 0
+                              ? const Radius.circular(4)
+                              : Radius.zero,
+                        ),
                       ),
+                      alignment: Alignment.center,
+                      child: team1Percentage >= 15
+                          ? Text(
+                        '${team1Percentage.toStringAsFixed(1)}%',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      )
+                          : const SizedBox(),
                     ),
-                    alignment: Alignment.center,
-                    child: team1Percentage >= 25
-                        ? Text(
-                      '${team1Percentage.toStringAsFixed(1)}%',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    )
-                        : const SizedBox(),
                   ),
-                ),
 
-                // Team 2
-                Expanded(
-                  flex: team2Votes > 0 ? team2Votes : 1,
-                  child: Container(
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.orange,
-                      borderRadius: BorderRadius.horizontal(
-                        right: const Radius.circular(4),
-                        left: team1Votes == 0 ? const Radius.circular(4) : Radius.zero,
+                  // Team 2
+                  Expanded(
+                    flex: team2Votes > 0 ? team2Votes : 1,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.horizontal(
+                          right: nonVoters == 0 ? const Radius.circular(4) : Radius.zero,
+                          left: team1Votes == 0 ? const Radius.circular(4) : Radius.zero,
+                        ),
                       ),
+                      alignment: Alignment.center,
+                      child: team2Percentage >= 15
+                          ? Text(
+                        '${team2Percentage.toStringAsFixed(1)}%',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      )
+                          : const SizedBox(),
                     ),
-                    alignment: Alignment.center,
-                    child: team2Percentage >= 25
-                        ? Text(
-                      '${team2Percentage.toStringAsFixed(1)}%',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    )
-                        : const SizedBox(),
                   ),
-                ),
-              ],
-            ),
+
+                  // Non-voters (only for fixed matches)
+                  Expanded(
+                    flex: nonVoters > 0 ? nonVoters : 1,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.grey,
+                        borderRadius: BorderRadius.horizontal(
+                          right: const Radius.circular(4),
+                          left: team1Votes == 0 && team2Votes == 0
+                              ? const Radius.circular(4)
+                              : Radius.zero,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: nonVotersPercentage >= 15
+                          ? Text(
+                        '${nonVotersPercentage.toStringAsFixed(1)}%',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      )
+                          : const SizedBox(),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              // For variable matches, show the original chart (only voters)
+              Row(
+                children: [
+                  // Team 1
+                  Expanded(
+                    flex: team1Votes > 0 ? team1Votes : 1,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.horizontal(
+                          left: const Radius.circular(4),
+                          right: team2Votes == 0 ? const Radius.circular(4) : Radius.zero,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: team1Percentage >= 25
+                          ? Text(
+                        '${team1Percentage.toStringAsFixed(1)}%',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      )
+                          : const SizedBox(),
+                    ),
+                  ),
+
+                  // Team 2
+                  Expanded(
+                    flex: team2Votes > 0 ? team2Votes : 1,
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.horizontal(
+                          right: const Radius.circular(4),
+                          left: team1Votes == 0 ? const Radius.circular(4) : Radius.zero,
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: team2Percentage >= 25
+                          ? Text(
+                        '${team2Percentage.toStringAsFixed(1)}%',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      )
+                          : const SizedBox(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Legend
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildLegendItem(Colors.blue, match.team1, team1Votes),
-                _buildLegendItem(Colors.orange, match.team2, team2Votes),
-              ],
-            ),
+            if (match.type == MatchType.fixed) ...[
+              // Legend for fixed matches (includes non-voters)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildLegendItem(Colors.blue, match.team1, team1Votes),
+                  _buildLegendItem(Colors.orange, match.team2, team2Votes),
+                  _buildLegendItem(Colors.grey, 'Did not vote', nonVoters),
+                ],
+              ),
+            ] else ...[
+              // Legend for variable matches
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildLegendItem(Colors.blue, match.team1, team1Votes),
+                  _buildLegendItem(Colors.orange, match.team2, team2Votes),
+                ],
+              ),
+            ],
 
             // Add winner indicator for finished matches
             if (isFinished) ...[
@@ -341,15 +575,13 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        Text('$team ($votes votes)'),
+        Text('$team ($votes)'),
       ],
     );
   }
 
-  Widget _buildVotesList(VoteDetailsViewModel viewModel, Match match) {
-    final votes = viewModel.voteDetails;
-
-    if (votes.isEmpty) {
+  Widget _buildVotesList(Match match, List<VoteDetails> effectiveVotes) {
+    if (effectiveVotes.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24.0),
@@ -364,29 +596,118 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
       );
     }
 
+    // Count users in each category for section headers
+    final team1Voters = effectiveVotes.where((v) => v.vote.vote == match.team1).length;
+    final team2Voters = effectiveVotes.where((v) => v.vote.vote == match.team2).length;
+    final nonVoterCount = effectiveVotes.where((v) => v.vote.status == 'non-voter').length;
+
+    // Always show sections (for both fixed and variable matches)
+    final bool showSections = true;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Votes',
-          style: TextStyle(
+        Text(
+          match.type == MatchType.fixed ? 'All Users' : 'Votes',
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 12),
+
+        // First section header for Team 1 (if we're showing sections)
+        if (showSections && team1Voters > 0) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Text(
+              '${match.team1} ($team1Voters)',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.blue[700],
+              ),
+            ),
+          ),
+        ],
+
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: votes.length,
-          separatorBuilder: (context, index) => const Divider(),
+          itemCount: effectiveVotes.length,
+          separatorBuilder: (context, index) {
+            if (showSections && index < effectiveVotes.length - 1) {
+              // Check for section transitions
+              final currentVote = effectiveVotes[index];
+              final nextVote = effectiveVotes[index + 1];
+
+              // Transition from Team 1 to Team 2
+              if (currentVote.vote.vote == match.team1 &&
+                  nextVote.vote.vote == match.team2) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Divider(thickness: 1.5),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
+                      child: Text(
+                        '${match.team2} ($team2Voters)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.orange[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              // Transition to Non-voters (only for fixed matches)
+              if (match.type == MatchType.fixed &&
+                  nextVote.vote.status == 'non-voter' &&
+                  currentVote.vote.status != 'non-voter') {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Divider(thickness: 1.5),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
+                      child: Text(
+                        'Did Not Vote ($nonVoterCount)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+            }
+
+            // Regular divider
+            return const Divider();
+          },
           itemBuilder: (context, index) {
-            final voteDetails = votes[index];
-            final isTeam1 = voteDetails.vote.vote == match.team1;
+            final voteDetails = effectiveVotes[index];
+            final String voteValue = voteDetails.vote.vote;
+            final bool isNonVoter = voteDetails.vote.status == 'non-voter';
+
+            // Set color based on vote
+            Color voteColor;
+            if (isNonVoter) {
+              voteColor = Colors.grey;
+            } else if (voteValue == match.team1) {
+              voteColor = Colors.blue;
+            } else {
+              voteColor = Colors.orange;
+            }
 
             return ListTile(
               leading: CircleAvatar(
-                backgroundColor: isTeam1 ? Colors.blue : Colors.orange,
+                backgroundColor: voteColor,
                 child: Text(
                   voteDetails.displayName.isNotEmpty
                       ? voteDetails.displayName[0].toUpperCase()
@@ -395,17 +716,19 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
                 ),
               ),
               title: Text(voteDetails.displayName),
-              subtitle: Text('Voted: ${voteDetails.vote.vote}'),
-              trailing: Container(
+              subtitle: Text(isNonVoter ? 'Did not vote' : 'Voted: ${voteDetails.vote.vote}'),
+              trailing: isNonVoter
+                  ? const Icon(Icons.how_to_vote_outlined, color: Colors.grey)
+                  : Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isTeam1 ? Colors.blue.shade100 : Colors.orange.shade100,
+                  color: voteColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   voteDetails.vote.vote,
                   style: TextStyle(
-                    color: isTeam1 ? Colors.blue.shade800 : Colors.orange.shade800,
+                    color: voteColor.withOpacity(0.8),
                     fontWeight: FontWeight.bold,
                   ),
                 ),

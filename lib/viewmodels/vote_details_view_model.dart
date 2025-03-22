@@ -99,6 +99,21 @@ class VoteDetailsViewModel with ChangeNotifier {
     }
   }
 
+  // New method to get all users for fixed matches
+  Future<List<UserProfile>> getAllUsers() async {
+    try {
+      final response = await _supabase
+          .from('user_profile')
+          .select();
+
+      return response.map<UserProfile>((json) => UserProfile.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error fetching all users: $e');
+      _setError('Failed to load all users: $e');
+      return [];
+    }
+  }
+
   // Get vote statistics
   Map<String, dynamic> getVoteStats() {
     if (_match == null || _voteDetails.isEmpty) {

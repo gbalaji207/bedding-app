@@ -338,22 +338,6 @@ class _VotingScreenState extends State<VotingScreen> {
                     ],
                   ),
                 )
-              else
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.how_to_vote, size: 12, color: Colors.grey[600]),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Tap to vote for a team',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
             ],
           ),
         ),
