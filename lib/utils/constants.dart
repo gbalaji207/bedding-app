@@ -9,6 +9,7 @@ class AppRoutes {
   static const String dashboard = '/dashboard';
   static const String matches = '/matches';
   static const String matchDetails = '/matches/details/:matchId'; // Path pattern with parameter
+  static const String matchResultUpdate = '/matches/result/:matchId';
   static const String results = '/results';
   static const String points = '/points';
   static const String voting = '/voting'; // Route for voting
@@ -22,6 +23,7 @@ class AppRoutes {
   static const String matchesName = 'matches';
   static const String matchFormName = 'matchForm';
   static const String matchDetailsName = 'matchDetails';
+  static const String matchResultUpdateName = 'matchResultUpdate';
   static const String resultsName = 'results';
   static const String pointsName = 'points';
   static const String votingName = 'voting'; // Route name for voting
@@ -31,5 +33,6 @@ class AppRoutes {
 
   // Helper methods for routes with parameters
   static String buildMatchDetailsPath(String matchId) => '/matches/details/$matchId';
+  static String buildMatchResultUpdatePath(String matchId) => '/matches/result/$matchId';
   static String buildVotingDetailsPath(String matchId) => '/voting/details/$matchId';
 }

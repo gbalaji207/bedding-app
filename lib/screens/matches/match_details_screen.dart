@@ -7,6 +7,7 @@ import '../../models/match_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/constants.dart';
 import '../../viewmodels/match_view_model.dart';
+import 'match_result_update_screen.dart';
 
 class MatchDetailsScreen extends StatefulWidget {
   final String matchId;
@@ -67,7 +68,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Error: $_errorMessage',
+            Text(
+              'Error: $_errorMessage',
               style: const TextStyle(color: Colors.red),
             ),
             const SizedBox(height: 16),
@@ -126,7 +128,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
             'Match Info',
             Column(
               children: [
-                _buildInfoRow('Type', _match!.type == MatchType.fixed ? 'Fixed Match' : 'Variable Match'),
+                _buildInfoRow(
+                    'Type',
+                    _match!.type == MatchType.fixed
+                        ? 'Fixed Match'
+                        : 'Variable Match'),
                 const Divider(),
                 _buildInfoRow('Date & Time', _match!.formattedStartDate),
               ],
@@ -243,7 +249,10 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     );
   }
 
+  // Updated _buildAdminActions method for match_details_screen.dart
   Widget _buildAdminActions(BuildContext context) {
+    final bool isFinished = _match!.status == MatchStatus.finished;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -255,7 +264,27 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
             color: Colors.grey,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
+
+        // Show update result button only when match is not finished
+        if (!isFinished) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _navigateToResultUpdate(context),
+              icon: const Icon(Icons.emoji_events),
+              label: const Text('Update Match Result'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Edit and delete options
         Row(
           children: [
             Expanded(
@@ -293,6 +322,32 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     );
   }
 
+  // New method to navigate to the result update screen
+  void _navigateToResultUpdate(BuildContext context) async {
+    // Check if the match is already finished
+    if (_match!.status == MatchStatus.finished) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This match is already finished'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Navigate to result update screen using GoRouter
+    final result = await context.pushNamed<bool>(
+      AppRoutes.matchResultUpdateName,
+      pathParameters: {'matchId': _match!.id},
+    );
+
+    // If result is true, the match result was successfully updated
+    if (result == true) {
+      // Reload match details
+      _loadMatchDetails();
+    }
+  }
+
   void _showDeleteConfirmation(BuildContext context) {
     showDialog(
       context: context,
@@ -307,7 +362,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
           TextButton(
             onPressed: () {
               // Delete match and navigate back
-              final viewModel = Provider.of<MatchViewModel>(context, listen: false);
+              final viewModel =
+                  Provider.of<MatchViewModel>(context, listen: false);
               viewModel.deleteMatch(_match!.id);
               Navigator.pop(context); // Close dialog
               context.pop(); // Navigate back

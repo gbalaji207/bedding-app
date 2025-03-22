@@ -17,8 +17,11 @@ class MatchViewModel with ChangeNotifier {
 
   // Getters
   List<Match> get matches => _matches;
+
   LoadingStatus get status => _status;
+
   String get errorMessage => _errorMessage;
+
   bool get isLoading => _status == LoadingStatus.loading;
 
   // Fetch all matches
@@ -89,5 +92,17 @@ class MatchViewModel with ChangeNotifier {
     _errorMessage = message;
     _status = LoadingStatus.error;
     notifyListeners();
+  }
+
+  // Refresh all data (matches)
+  Future<void> refreshData() async {
+    _setLoading();
+
+    try {
+      // Fetch all matches again
+      await fetchMatches();
+    } catch (e) {
+      _setError(e.toString());
+    }
   }
 }

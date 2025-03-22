@@ -12,13 +12,17 @@ import 'package:voting_app/viewmodels/vote_details_view_model.dart';
 
 import '../providers/auth_provider.dart';
 import '../repositories/match_repository.dart';
+import '../repositories/match_result_repository.dart';
 import '../repositories/vote_repository.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
+import '../screens/matches/match_result_update_screen.dart';
 import '../screens/matches/matches_screen.dart';
 import '../screens/matches/match_details_screen.dart';
 import '../screens/results/match_results_screen.dart';
 import '../screens/points/points_screen.dart';
+import '../viewmodels/match_result_view_model.dart';
+import '../viewmodels/match_view_model.dart';
 import '../widgets/app_scaffold.dart';
 import '../utils/constants.dart';
 
@@ -84,7 +88,8 @@ class AppRouter {
             path: AppRoutes.results,
             name: AppRoutes.resultsName,
             builder: (context, state) => Provider<MatchRepository>(
-              create: (_) => Provider.of<MatchRepository>(context, listen: false),
+              create: (_) =>
+                  Provider.of<MatchRepository>(context, listen: false),
               child: const MatchResultsScreen(),
             ),
           ),
@@ -124,8 +129,10 @@ class AppRouter {
         name: AppRoutes.matchFormName,
         builder: (context, state) {
           // First check if matchId is passed as an extra
-          final Map<String, dynamic>? extras = state.extra as Map<String, dynamic>?;
-          final String? matchId = extras != null ? extras['matchId'] as String? : null;
+          final Map<String, dynamic>? extras =
+              state.extra as Map<String, dynamic>?;
+          final String? matchId =
+              extras != null ? extras['matchId'] as String? : null;
 
           return Scaffold(
             appBar: AppBar(
@@ -152,6 +159,49 @@ class AppRouter {
           );
         },
       ),
+      GoRoute(
+        path: AppRoutes.matchResultUpdate,
+        name: AppRoutes.matchResultUpdateName,
+        builder: (context, state) {
+          final matchId = state.pathParameters['matchId']!;
+
+          // Return the screen with the providers it needs
+          return Scaffold(
+            appBar: AppBar(title: const Text('Update Match Result')),
+            body: MultiProvider(
+              providers: [
+                // Provide the match result repository
+                Provider<MatchResultRepository>(
+                  create: (context) => MatchResultRepository(
+                    Supabase.instance.client,
+                    dryRun:
+                        false, // Set to true for dry run mode, false for actual database updates
+                  ),
+                ),
+                // Provide the match result view model
+                ChangeNotifierProvider<MatchResultViewModel>(
+                  create: (context) => MatchResultViewModel(
+                    Provider.of<MatchRepository>(context, listen: false),
+                    Provider.of<MatchResultRepository>(context, listen: false),
+                  ),
+                ),
+              ],
+              child: MatchResultUpdateScreen(
+                matchId: matchId,
+                onSuccess: () {
+                  // Refresh match data in the MatchViewModel
+                  try {
+                    Provider.of<MatchViewModel>(context, listen: false)
+                        .refreshData();
+                  } catch (e) {
+                    // Ignore errors here
+                  }
+                },
+              ),
+            ),
+          );
+        },
+      ),
       // Change password route
       GoRoute(
         path: AppRoutes.changePassword,
@@ -173,7 +223,8 @@ class AppRouter {
       }
 
       if (isLoggedIn && isLoggingIn) {
-        return AppRoutes.voting; // Direct users to the voting screen after login
+        return AppRoutes
+            .voting; // Direct users to the voting screen after login
       }
 
       return null;
