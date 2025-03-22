@@ -1,10 +1,16 @@
 // lib/config/app_router.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:voting_app/screens/matches/match_form_screen.dart';
+import 'package:voting_app/screens/voting/voting_details_screen.dart';
 import 'package:voting_app/screens/voting/voting_screen.dart';
+import 'package:voting_app/viewmodels/vote_details_view_model.dart';
 
 import '../providers/auth_provider.dart';
+import '../repositories/match_repository.dart';
+import '../repositories/vote_repository.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/matches/matches_screen.dart';
@@ -73,7 +79,10 @@ class AppRouter {
           GoRoute(
             path: AppRoutes.results,
             name: AppRoutes.resultsName,
-            builder: (context, state) => const MatchResultsScreen(),
+            builder: (context, state) => Provider<MatchRepository>(
+              create: (_) => Provider.of<MatchRepository>(context, listen: false),
+              child: const MatchResultsScreen(),
+            ),
           ),
           GoRoute(
             path: AppRoutes.points,
@@ -114,6 +123,23 @@ class AppRouter {
               title: Text(matchId != null ? 'Edit Match' : 'Add Match'),
             ),
             body: MatchFormScreen(matchId: matchId),
+          );
+        },
+      ),
+      // Voting details route
+      GoRoute(
+        path: '/voting/details/:matchId',
+        name: AppRoutes.votingDetailsName,
+        builder: (context, state) {
+          final matchId = state.pathParameters['matchId']!;
+
+          return ChangeNotifierProvider(
+            create: (context) => VoteDetailsViewModel(
+              Provider.of<VoteRepository>(context, listen: false),
+              Provider.of<MatchRepository>(context, listen: false),
+              Supabase.instance.client,
+            ),
+            child: VotingDetailsScreen(matchId: matchId),
           );
         },
       ),

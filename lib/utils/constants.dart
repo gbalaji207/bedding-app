@@ -12,6 +12,7 @@ class AppRoutes {
   static const String results = '/results';
   static const String points = '/points';
   static const String voting = '/voting'; // New route for voting
+  static const String votingDetails = '/voting/details/:matchId'; // New route for voting details
 
   // Route name constants
   static const String loginName = 'login';
@@ -22,7 +23,9 @@ class AppRoutes {
   static const String resultsName = 'results';
   static const String pointsName = 'points';
   static const String votingName = 'voting'; // New route name for voting
+  static const String votingDetailsName = 'votingDetails'; // New route name for voting details
 
   // Helper methods for routes with parameters
   static String buildMatchDetailsPath(String matchId) => '/matches/details/$matchId';
+  static String buildVotingDetailsPath(String matchId) => '/voting/details/$matchId';
 }

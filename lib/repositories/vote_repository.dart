@@ -2,6 +2,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/vote_model.dart';
+import '../models/match_model.dart';
 
 class VoteRepository {
   final SupabaseClient _supabase;
@@ -40,9 +41,31 @@ class VoteRepository {
     }
   }
 
-  // Save or update a vote
-  Future<void> saveVote(String userId, String matchId, String teamVote) async {
+  // Get all votes for a specific match
+  Future<List<Vote>> getMatchVotes(String matchId) async {
     try {
+      final response = await _supabase
+          .from('votes')
+          .select()
+          .eq('match_id', matchId);
+
+      return response.map<Vote>((json) => Vote.fromJson(json)).toList();
+    } catch (e) {
+      throw Exception('Failed to load match votes: $e');
+    }
+  }
+
+  // Save or update a vote
+  Future<void> saveVote(String userId, String matchId, String teamVote, {Match? match}) async {
+    try {
+      // If we have the match data, check if voting is still allowed
+      if (match != null) {
+        final now = DateTime.now();
+        if (now.isAfter(match.startDate)) {
+          throw Exception('Voting is closed for this match as it has already started');
+        }
+      }
+
       // Check if vote exists
       final existingVote = await getVoteForMatch(userId, matchId);
 

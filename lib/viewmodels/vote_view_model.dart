@@ -30,15 +30,8 @@ class VoteViewModel with ChangeNotifier {
     _setLoading();
 
     try {
-      // Get all matches
-      final allMatches = await _matchRepository.getMatches();
-
-      // Filter for future matches (matches that start in the future)
-      final now = DateTime.now();
-      _futureMatches = allMatches
-          .where((match) => match.startDate.isAfter(now))
-          .toList();
-
+      // Get future matches directly from the database
+      _futureMatches = await _matchRepository.getFutureMatches();
       _setSuccess();
     } catch (e) {
       _setError(e.toString());
@@ -71,12 +64,33 @@ class VoteViewModel with ChangeNotifier {
     return _userVotes[matchId];
   }
 
+  // Get a specific match by ID
+  Match? getMatchById(String matchId) {
+    try {
+      return _futureMatches.firstWhere((match) => match.id == matchId);
+    } catch (e) {
+      return null;
+    }
+  }
+
   // Save a vote for a match
   Future<bool> saveVote(String userId, String matchId, String teamVote) async {
     _setLoading();
 
     try {
-      await _voteRepository.saveVote(userId, matchId, teamVote);
+      // Get the match to check if voting is still allowed
+      final match = getMatchById(matchId);
+
+      if (match != null) {
+        final now = DateTime.now();
+        if (now.isAfter(match.startDate)) {
+          _setError('Voting is closed for this match as it has already started');
+          return false;
+        }
+      }
+
+      // Save the vote with the match for time validation
+      await _voteRepository.saveVote(userId, matchId, teamVote, match: match);
 
       // Reload user votes to update the UI
       await loadUserVotes(userId);
@@ -94,10 +108,23 @@ class VoteViewModel with ChangeNotifier {
     _setLoading();
 
     try {
+      // First check if the related match has started
+      final vote = _userVotes.values.firstWhere((v) => v.id == voteId);
+      final matchId = vote.userId;
+      final match = getMatchById(matchId);
+
+      if (match != null) {
+        final now = DateTime.now();
+        if (now.isAfter(match.startDate)) {
+          _setError('Cannot delete vote as match has already started');
+          return false;
+        }
+      }
+
       await _voteRepository.deleteVote(voteId);
 
       // Get the current user's ID
-      final currentUserId = _userVotes.values.firstWhere((vote) => vote.id == voteId).userId;
+      final currentUserId = vote.userId;
 
       // Reload user votes to update the UI
       await loadUserVotes(currentUserId);
