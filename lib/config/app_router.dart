@@ -27,7 +27,7 @@ class AppRouter {
       GoRoute(
         path: AppRoutes.root,
         redirect: (context, state) {
-          return appState.isLoggedIn ? AppRoutes.dashboard : AppRoutes.login;
+          return appState.isLoggedIn ? AppRoutes.voting : AppRoutes.login;
         },
       ),
       GoRoute(

@@ -42,14 +42,14 @@ class AppDrawer extends StatelessWidget {
               color: Colors.blue,
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.dashboard),
-            title: const Text('Dashboard'),
-            onTap: () {
-              context.goNamed(AppRoutes.dashboardName);
-              Navigator.pop(context); // Close drawer
-            },
-          ),
+          // ListTile(
+          //   leading: const Icon(Icons.dashboard),
+          //   title: const Text('Dashboard'),
+          //   onTap: () {
+          //     context.goNamed(AppRoutes.dashboardName);
+          //     Navigator.pop(context); // Close drawer
+          //   },
+          // ),
           ListTile(
             leading: const Icon(Icons.how_to_vote),
             title: const Text('Vote for Matches'),
