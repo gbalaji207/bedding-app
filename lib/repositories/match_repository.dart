@@ -1,4 +1,5 @@
 // lib/repositories/match_repository.dart
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/match_model.dart';
 
@@ -24,13 +25,18 @@ class MatchRepository {
   // Get future matches (matches that haven't started yet)
   Future<List<Match>> getFutureMatches() async {
     try {
-      final now = DateTime.now().toIso8601String();
+      // Create a UTC DateTime and convert to ISO string for database comparison
+      final now = DateTime.now().toUtc().toIso8601String();
+
+      debugPrint('Getting future matches from: $now');
+
       final response = await _supabaseClient
           .from('matches')
           .select()
           .gte('start_date', now) // Greater than or equal to current time
           .order('start_date', ascending: true);
 
+      // Convert to local time in Match.fromJson constructor
       return response.map<Match>((json) => Match.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to load future matches: $e');
@@ -40,13 +46,18 @@ class MatchRepository {
   // Get past matches (matches that have already started)
   Future<List<Match>> getPastMatches() async {
     try {
-      final now = DateTime.now().toIso8601String();
+      // Create a UTC DateTime and convert to ISO string for database comparison
+      final now = DateTime.now().toUtc().toIso8601String();
+
+      debugPrint('Getting past matches before: $now');
+
       final response = await _supabaseClient
           .from('matches')
           .select()
           .lt('start_date', now) // Less than current time
           .order('start_date', ascending: false); // Most recent first
 
+      // Convert to local time in Match.fromJson constructor
       return response.map<Match>((json) => Match.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to load past matches: $e');
@@ -62,6 +73,7 @@ class MatchRepository {
           .eq('id', id)
           .single();
 
+      // Convert to local time in Match.fromJson constructor
       return Match.fromJson(response);
     } catch (e) {
       throw Exception('Failed to load match details: $e');
@@ -71,6 +83,7 @@ class MatchRepository {
   // Create a new match
   Future<void> createMatch(Match match) async {
     try {
+      // Match.toJson handles converting local time to UTC for storage
       await _supabaseClient
           .from('matches')
           .insert(match.toJson());
@@ -82,6 +95,7 @@ class MatchRepository {
   // Update an existing match
   Future<void> updateMatch(Match match) async {
     try {
+      // Match.toJson handles converting local time to UTC for storage
       await _supabaseClient
           .from('matches')
           .update(match.toJson())

@@ -13,7 +13,7 @@ class VoteViewModel with ChangeNotifier {
 
   VoteLoadingStatus _status = VoteLoadingStatus.idle;
   String _errorMessage = '';
-  List<Match> _futureMatches = [];
+  List<Match> _allFutureMatches = []; // All future matches from the repository
   Map<String, Vote> _userVotes = {}; // matchId -> Vote
 
   VoteViewModel(this._voteRepository, this._matchRepository);
@@ -21,7 +21,15 @@ class VoteViewModel with ChangeNotifier {
   // Getters
   VoteLoadingStatus get status => _status;
   String get errorMessage => _errorMessage;
-  List<Match> get futureMatches => _futureMatches;
+
+  // Get only the matches where voting is still open
+  List<Match> get futureMatches => _allFutureMatches
+      .where((match) => !match.isVotingClosed())
+      .toList();
+
+  // Get all future matches, including those with closed voting
+  List<Match> get allFutureMatches => _allFutureMatches;
+
   Map<String, Vote> get userVotes => _userVotes;
   bool get isLoading => _status == VoteLoadingStatus.loading;
 
@@ -31,7 +39,14 @@ class VoteViewModel with ChangeNotifier {
 
     try {
       // Get future matches directly from the database
-      _futureMatches = await _matchRepository.getFutureMatches();
+      _allFutureMatches = await _matchRepository.getFutureMatches();
+
+      // Log information about matches and their voting status
+      for (var match in _allFutureMatches) {
+        final isClosed = match.isVotingClosed();
+        debugPrint('Match: ${match.title}, Start: ${match.startDate}, Cutoff: ${match.votingCutoffTime}, Voting Closed: $isClosed');
+      }
+
       _setSuccess();
     } catch (e) {
       _setError(e.toString());
@@ -67,10 +82,15 @@ class VoteViewModel with ChangeNotifier {
   // Get a specific match by ID
   Match? getMatchById(String matchId) {
     try {
-      return _futureMatches.firstWhere((match) => match.id == matchId);
+      return _allFutureMatches.firstWhere((match) => match.id == matchId);
     } catch (e) {
       return null;
     }
+  }
+
+  // Check if voting is closed for a match
+  bool isVotingClosed(Match match) {
+    return match.isVotingClosed();
   }
 
   // Save a vote for a match
@@ -82,10 +102,8 @@ class VoteViewModel with ChangeNotifier {
       final match = getMatchById(matchId);
 
       if (match != null) {
-        final now = DateTime.now();
-        final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
-
-        if (now.isAfter(cutoffTime)) {
+        // Check if voting is closed using the Match model
+        if (match.isVotingClosed()) {
           _setError('Voting is closed for this match as it starts in less than 30 minutes');
           return false;
         }
@@ -116,10 +134,8 @@ class VoteViewModel with ChangeNotifier {
       final match = getMatchById(matchId);
 
       if (match != null) {
-        final now = DateTime.now();
-        final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
-
-        if (now.isAfter(cutoffTime)) {
+        // Check if voting is closed using the Match model
+        if (match.isVotingClosed()) {
           _setError('Cannot delete vote as match starts in less than 30 minutes');
           return false;
         }

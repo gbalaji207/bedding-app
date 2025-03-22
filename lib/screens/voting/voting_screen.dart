@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:async'; // For timer functionality
 
 import '../../models/match_model.dart';
 import '../../models/vote_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../viewmodels/vote_view_model.dart';
 import '../../utils/constants.dart';
+import '../../utils/date_helpers.dart';
 
 class VotingScreen extends StatefulWidget {
   const VotingScreen({Key? key}) : super(key: key);
@@ -18,13 +20,33 @@ class VotingScreen extends StatefulWidget {
 }
 
 class _VotingScreenState extends State<VotingScreen> {
+  // Timer to periodically check for cutoff times
+  Timer? _cutoffTimer;
+
   @override
   void initState() {
     super.initState();
     // Load future matches and user votes when screen initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
+
+      // Set up a timer to refresh the view every minute to account for cutoff times
+      _cutoffTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+        if (mounted) {
+          setState(() {
+            // Just trigger a rebuild to evaluate cutoff times
+            debugPrint('Timer triggered rebuild to check for cutoff times');
+          });
+        }
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    // Cancel the timer when the screen is disposed
+    _cutoffTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -75,17 +97,61 @@ class _VotingScreenState extends State<VotingScreen> {
       );
     }
 
-    if (voteViewModel.futureMatches.isEmpty) {
-      return const Center(
-        child: Text('No upcoming matches found'),
-      );
+    // Get only matches that are still open for voting
+    // Re-evaluate isVotingClosed each time to account for time passing
+    final votableMatches = voteViewModel.allFutureMatches
+        .where((match) => !match.isVotingClosed())
+        .toList();
+
+    if (votableMatches.isEmpty) {
+      // Check if there are any future matches at all
+      if (voteViewModel.allFutureMatches.isEmpty) {
+        return const Center(
+          child: Text('No upcoming matches found'),
+        );
+      } else {
+        // There are future matches, but voting is closed for all of them
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.timer_off, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text(
+                'No matches available for voting',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'All upcoming matches are within 30 minutes of starting.',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  context.pushNamed(AppRoutes.resultsName);
+                },
+                icon: const Icon(Icons.scoreboard),
+                label: const Text('View Match Results'),
+              ),
+            ],
+          ),
+        );
+      }
     }
 
     return ListView.builder(
       padding: const EdgeInsets.all(8.0),
-      itemCount: voteViewModel.futureMatches.length,
+      itemCount: votableMatches.length,
       itemBuilder: (context, index) {
-        final match = voteViewModel.futureMatches[index];
+        final match = votableMatches[index];
         return _buildMatchCard(context, match, voteViewModel, appState);
       },
     );
@@ -101,10 +167,9 @@ class _VotingScreenState extends State<VotingScreen> {
     final hasVoted = voteViewModel.hasVotedForMatch(match.id);
     final userVote = voteViewModel.getVoteForMatch(match.id);
 
-    // Check if voting is closed (match starts in less than 30 mins)
-    final now = DateTime.now();
-    final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
-    final votingClosed = now.isAfter(cutoffTime);
+    // Calculate time remaining until cutoff
+    final Duration timeUntilCutoff = match.timeUntilVotingCloses;
+    final bool closeToCutoff = timeUntilCutoff.inHours < 2;
 
     // Determine the color for each team based on the user's vote
     Color team1Color = Colors.grey.shade200;
@@ -122,14 +187,25 @@ class _VotingScreenState extends State<VotingScreen> {
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
       child: InkWell(
         onTap: () {
-          // Check if voting is closed
-          if (votingClosed) {
-            // If voting is closed, show voting details
+          // Real-time check for cutoff time
+          if (match.isVotingClosed()) {
+            // If the match has crossed the cutoff time since the screen loaded
+            // Show a message and redirect to the voting details
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Voting is now closed for this match.'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+
+            // Navigate to voting details
             context.push(AppRoutes.buildVotingDetailsPath(match.id));
-          } else {
-            // If voting is still open, show voting options
-            _showVotingBottomSheet(context, match, voteViewModel, appState);
+            return;
           }
+
+          // Show voting options
+          _showVotingBottomSheet(context, match, voteViewModel, appState);
         },
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -233,25 +309,51 @@ class _VotingScreenState extends State<VotingScreen> {
                   _buildVoteStatus(hasVoted, userVote),
                 ],
               ),
-              // Add a hint for users based on match time
+
+              // Countdown timer or voting status message
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.info_outline, size: 12, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    votingClosed
-                        ? 'Tap to see voting results'
-                        : 'Tap to vote for a team',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                      fontStyle: FontStyle.italic,
-                    ),
+              if (closeToCutoff)
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.amber),
                   ),
-                ],
-              ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.timer, size: 14, color: Colors.amber.shade800),
+                      const SizedBox(width: 4),
+                      Text(
+                        timeUntilCutoff.inMinutes > 60
+                            ? 'Voting closes in ${timeUntilCutoff.inHours}h ${timeUntilCutoff.inMinutes % 60}m'
+                            : 'Voting closes in ${timeUntilCutoff.inMinutes}m',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.amber.shade800,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.how_to_vote, size: 12, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Tap to vote for a team',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -279,6 +381,20 @@ class _VotingScreenState extends State<VotingScreen> {
       VoteViewModel voteViewModel,
       AppState appState,
       ) {
+    // Real-time check for cutoff time
+    if (match.isVotingClosed()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Voting is now closed for this match. You cannot delete your vote.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      // If the cutoff time has passed, redirect to the voting details screen
+      context.push(AppRoutes.buildVotingDetailsPath(match.id));
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -292,6 +408,22 @@ class _VotingScreenState extends State<VotingScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context); // Close dialog
+
+              // Check for cutoff one more time before proceeding
+              if (match.isVotingClosed()) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Voting period has ended. Your vote cannot be deleted now.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+
+                  // Redirect to voting details
+                  context.push(AppRoutes.buildVotingDetailsPath(match.id));
+                }
+                return;
+              }
 
               final vote = voteViewModel.getVoteForMatch(match.id);
               if (vote != null) {
@@ -340,6 +472,21 @@ class _VotingScreenState extends State<VotingScreen> {
       VoteViewModel voteViewModel,
       AppState appState,
       ) {
+    debugPrint("_showVotingBottomSheet - isVotingClosed: ${match.isVotingClosed()}");
+    // Real-time check for cutoff time when voting dialog opens
+    if (match.isVotingClosed()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Voting is now closed for this match.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      // Navigate to voting details instead
+      context.push(AppRoutes.buildVotingDetailsPath(match.id));
+      return;
+    }
+
     // Default selected team (null means nothing selected yet)
     String? selectedTeam;
 
@@ -347,6 +494,9 @@ class _VotingScreenState extends State<VotingScreen> {
     if (voteViewModel.hasVotedForMatch(match.id)) {
       selectedTeam = voteViewModel.getVoteForMatch(match.id)!.vote;
     }
+
+    // Timestamp when the sheet is shown - to later calculate if too much time has passed
+    final sheetOpenedTime = DateTime.now();
 
     showModalBottomSheet(
       context: context,
@@ -373,7 +523,19 @@ class _VotingScreenState extends State<VotingScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  const SizedBox(height: 4),
+
+                  // Show the cutoff time
+                  Text(
+                    'Voting closes at ${DateFormat('h:mm a').format(match.votingCutoffTime)}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 16),
+
                   const Text(
                     'Select a team to vote:',
                     style: TextStyle(fontSize: 16),
@@ -422,6 +584,37 @@ class _VotingScreenState extends State<VotingScreen> {
                             : () async {
                           Navigator.pop(context);
 
+                          // Multiple safeguards against voting after cutoff
+
+                          // 1. Check if the match is now closed
+                          if (match.isVotingClosed()) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Voting period has ended while you were selecting. Your vote was not saved.'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+
+                            // Redirect to voting details
+                            context.push(AppRoutes.buildVotingDetailsPath(match.id));
+                            return;
+                          }
+
+                          // 2. Check if too much time has passed since the sheet was opened
+                          final timeElapsed = DateTime.now().difference(sheetOpenedTime);
+                          if (timeElapsed > const Duration(minutes: 5)) {
+                            // If more than 5 minutes passed, do another check to be safe
+                            if (match.isVotingClosed()) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Voting session timed out. Please try again.'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                              return;
+                            }
+                          }
+
                           // Show loading indicator
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -430,7 +623,7 @@ class _VotingScreenState extends State<VotingScreen> {
                             ),
                           );
 
-                          // Save vote
+                          // Save vote - the ViewModel will do a final cutoff check
                           final success = await voteViewModel.saveVote(
                             appState.user!.id,
                             match.id,
@@ -445,6 +638,9 @@ class _VotingScreenState extends State<VotingScreen> {
                                 backgroundColor: Colors.green,
                               ),
                             );
+
+                            // Force reload to refresh the UI
+                            _loadData();
                           } else if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(

@@ -66,16 +66,15 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
           return const Center(child: Text('Match not found'));
         }
 
-        // Check if voting is closed (match starts in less than 30 mins)
-        final now = DateTime.now();
-        final cutoffTime = viewModel.match!.startDate.subtract(const Duration(minutes: 30));
-        final votingClosed = now.isAfter(cutoffTime);
+        // Check if voting is closed using the Match model
+        final match = viewModel.match!;
+        final votingClosed = match.isVotingClosed();
 
         // If voting hasn't closed yet, show a message and navigation back
         if (!votingClosed) {
           return Scaffold(
             appBar: AppBar(
-              title: Text('${viewModel.match!.title}'),
+              title: Text('${match.title}'),
               elevation: 0,
             ),
             body: Center(
@@ -100,7 +99,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Voting details will be visible once voting closes at ${DateFormat('MMM dd, yyyy - h:mm a').format(viewModel.match!.startDate.subtract(const Duration(minutes: 30)))}',
+                      'Voting details will be visible once voting closes at ${DateFormat('MMM dd, yyyy - h:mm a').format(match.votingCutoffTime)}',
                       style: const TextStyle(fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
@@ -120,8 +119,8 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
         return Scaffold(
           appBar: AppBar(
             title: Text(votingClosed
-                ? '${viewModel.match!.title} - Results'
-                : '${viewModel.match!.title} - Voting Details'),
+                ? '${match.title} - Results'
+                : '${match.title} - Voting Details'),
             elevation: 0,
           ),
           body: _buildContent(viewModel),
@@ -199,7 +198,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
             const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
             const SizedBox(width: 8),
             Text(
-              DateFormat('MMM dd, yyyy - h:mm a').format(match.startDate),
+              match.formattedStartDate,
               style: TextStyle(
                 color: Colors.grey.shade700,
               ),

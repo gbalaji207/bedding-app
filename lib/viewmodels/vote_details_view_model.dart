@@ -7,6 +7,7 @@ import '../models/vote_details_model.dart';
 import '../models/user_profile.dart';
 import '../repositories/match_repository.dart';
 import '../repositories/vote_repository.dart';
+import '../utils/date_helpers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum VoteDetailsLoadingStatus { idle, loading, success, error }
@@ -36,6 +37,8 @@ class VoteDetailsViewModel with ChangeNotifier {
 
     try {
       _match = await _matchRepository.getMatchById(matchId);
+      DateHelpers.logDateInfo('Match start date', _match!.startDate);
+      DateHelpers.logDateInfo('Match cutoff time', _match!.votingCutoffTime);
       _setSuccess();
     } catch (e) {
       _setError(e.toString());
@@ -49,12 +52,15 @@ class VoteDetailsViewModel with ChangeNotifier {
     try {
       // First check if voting is closed
       if (_match != null) {
-        final now = DateTime.now();
-        final cutoffTime = _match!.startDate.subtract(const Duration(minutes: 30));
-        final votingClosed = now.isAfter(cutoffTime);
+        // Use the Match model's isVotingClosed method for consistent logic
+        final votingClosed = _match!.isVotingClosed();
 
         // If voting hasn't closed yet, don't show votes
         if (!votingClosed) {
+          debugPrint('Voting not closed yet for match: ${_match!.title}');
+          debugPrint('Current time: ${DateTime.now()}');
+          debugPrint('Cutoff time: ${_match!.votingCutoffTime}');
+
           _voteDetails = [];
           _setSuccess();
           return;
@@ -63,6 +69,7 @@ class VoteDetailsViewModel with ChangeNotifier {
 
       // Get all votes for the match
       final votes = await _voteRepository.getMatchVotes(matchId);
+      debugPrint('Loaded ${votes.length} votes for match $matchId');
 
       // Prepare a list to store the vote details
       List<VoteDetails> details = [];
@@ -79,6 +86,7 @@ class VoteDetailsViewModel with ChangeNotifier {
           UserProfile userProfile = UserProfile.fromJson(response);
           details.add(VoteDetails(vote: vote, userProfile: userProfile));
         } catch (e) {
+          debugPrint('Error fetching profile for user ${vote.userId}: $e');
           // If profile not found, still add the vote but without profile
           details.add(VoteDetails(vote: vote));
         }
@@ -89,6 +97,49 @@ class VoteDetailsViewModel with ChangeNotifier {
     } catch (e) {
       _setError(e.toString());
     }
+  }
+
+  // Get vote statistics
+  Map<String, dynamic> getVoteStats() {
+    if (_match == null || _voteDetails.isEmpty) {
+      return {
+        'team1Votes': 0,
+        'team2Votes': 0,
+        'totalVotes': 0,
+        'team1Percentage': 0.0,
+        'team2Percentage': 0.0,
+      };
+    }
+
+    final team1Votes = _voteDetails.where((v) => v.vote.vote == _match!.team1).length;
+    final team2Votes = _voteDetails.where((v) => v.vote.vote == _match!.team2).length;
+    final totalVotes = _voteDetails.length;
+
+    final team1Percentage = totalVotes > 0 ? (team1Votes / totalVotes) * 100 : 0.0;
+    final team2Percentage = totalVotes > 0 ? (team2Votes / totalVotes) * 100 : 0.0;
+
+    return {
+      'team1Votes': team1Votes,
+      'team2Votes': team2Votes,
+      'totalVotes': totalVotes,
+      'team1Percentage': team1Percentage,
+      'team2Percentage': team2Percentage,
+    };
+  }
+
+  // Determine winner (if match is finished)
+  String? getWinner() {
+    if (_match == null || _match!.status != MatchStatus.finished || _voteDetails.isEmpty) {
+      return null;
+    }
+
+    final stats = getVoteStats();
+    return stats['team1Votes'] > stats['team2Votes'] ? _match!.team1 : _match!.team2;
+  }
+
+  // Get votes for a specific team
+  List<VoteDetails> getVotesForTeam(String team) {
+    return _voteDetails.where((v) => v.vote.vote == team).toList();
   }
 
   // Helper methods to update state

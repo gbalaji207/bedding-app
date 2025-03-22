@@ -1,4 +1,5 @@
 // lib/repositories/vote_repository.dart
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/vote_model.dart';
@@ -55,17 +56,49 @@ class VoteRepository {
     }
   }
 
+  // Get the match details first to verify cutoff time
+  Future<Match> _getMatchForCutoffValidation(String matchId) async {
+    try {
+      final response = await _supabase
+          .from('matches')
+          .select()
+          .eq('id', matchId)
+          .single();
+
+      return Match.fromJson(response);
+    } catch (e) {
+      throw Exception('Failed to validate match cutoff time: $e');
+    }
+  }
+
+  // Check if voting is allowed for a match
+  bool isVotingAllowed(Match match) {
+    // Calculate cutoff time (30 minutes before match starts)
+    final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
+
+    // Get current time
+    final now = DateTime.now();
+
+    // Debug info to verify the comparison
+    debugPrint('Repository - Now (local): $now');
+    debugPrint('Repository - Match start time (local): ${match.startDate}');
+    debugPrint('Repository - Cutoff (local): $cutoffTime');
+    debugPrint('Repository - Is voting allowed: ${now.isBefore(cutoffTime)}');
+
+    // Return true if current time is before cutoff time
+    return now.isBefore(cutoffTime);
+  }
+
   // Save or update a vote
   Future<void> saveVote(String userId, String matchId, String teamVote, {Match? match}) async {
     try {
-      // If we have the match data, check if voting is still allowed
-      if (match != null) {
-        final now = DateTime.now();
-        final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
+      // If match data is not provided, fetch it directly from the database
+      // to ensure we have the most up-to-date information for validation
+      final matchForValidation = match ?? await _getMatchForCutoffValidation(matchId);
 
-        if (now.isAfter(cutoffTime)) {
-          throw Exception('Voting is closed for this match as it starts in less than 30 minutes');
-        }
+      // Strict validation to ensure voting hasn't closed
+      if (!isVotingAllowed(matchForValidation)) {
+        throw Exception('Voting is closed for this match as it starts in less than 30 minutes');
       }
 
       // Check if vote exists
@@ -93,7 +126,10 @@ class VoteRepository {
             .from('votes')
             .insert(newVote.toJson());
       }
+
+      debugPrint('Vote saved successfully for match: $matchId, team: $teamVote');
     } catch (e) {
+      debugPrint('Error saving vote: $e');
       throw Exception('Failed to save vote: $e');
     }
   }
@@ -101,6 +137,23 @@ class VoteRepository {
   // Delete a vote
   Future<void> deleteVote(String voteId) async {
     try {
+      // First get the vote to check its match ID
+      final voteResponse = await _supabase
+          .from('votes')
+          .select('match_id')
+          .eq('id', voteId)
+          .single();
+
+      final matchId = voteResponse['match_id'] as String;
+
+      // Get match data to verify cutoff time
+      final match = await _getMatchForCutoffValidation(matchId);
+
+      // Validate that voting is still allowed before deletion
+      if (!isVotingAllowed(match)) {
+        throw Exception('Cannot delete vote as match starts in less than 30 minutes');
+      }
+
       final result = await _supabase
           .from('votes')
           .delete()
@@ -111,7 +164,10 @@ class VoteRepository {
       if (result == null) {
         throw Exception('Vote not found or you do not have permission to delete it');
       }
+
+      debugPrint('Vote deleted successfully: $voteId');
     } catch (e) {
+      debugPrint('Error deleting vote: $e');
       throw Exception('Failed to delete vote: $e');
     }
   }
