@@ -83,8 +83,10 @@ class VoteViewModel with ChangeNotifier {
 
       if (match != null) {
         final now = DateTime.now();
-        if (now.isAfter(match.startDate)) {
-          _setError('Voting is closed for this match as it has already started');
+        final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
+
+        if (now.isAfter(cutoffTime)) {
+          _setError('Voting is closed for this match as it starts in less than 30 minutes');
           return false;
         }
       }
@@ -108,15 +110,17 @@ class VoteViewModel with ChangeNotifier {
     _setLoading();
 
     try {
-      // First check if the related match has started
+      // First check if the related match is within 30 minutes of starting
       final vote = _userVotes.values.firstWhere((v) => v.id == voteId);
-      final matchId = vote.userId;
+      final matchId = vote.matchId;
       final match = getMatchById(matchId);
 
       if (match != null) {
         final now = DateTime.now();
-        if (now.isAfter(match.startDate)) {
-          _setError('Cannot delete vote as match has already started');
+        final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
+
+        if (now.isAfter(cutoffTime)) {
+          _setError('Cannot delete vote as match starts in less than 30 minutes');
           return false;
         }
       }

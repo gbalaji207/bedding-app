@@ -44,7 +44,7 @@ class MatchRepository {
       final response = await _supabaseClient
           .from('matches')
           .select()
-          // .lt('start_date', now) // Less than current time
+          .lt('start_date', now) // Less than current time
           .order('start_date', ascending: false); // Most recent first
 
       return response.map<Match>((json) => Match.fromJson(json)).toList();

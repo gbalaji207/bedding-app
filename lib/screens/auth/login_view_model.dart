@@ -6,8 +6,8 @@ class LoginViewModel extends ChangeNotifier {
   final AppState _authProvider;
 
   // Form state
-  String _email = 'balagiiii@gmail.com';
-  String _password = '123123';
+  String _email = '';
+  String _password = '';
   String? _errorMessage;
   bool _isLoading = false;
   bool _isPasswordVisible = false;

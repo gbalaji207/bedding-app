@@ -101,9 +101,10 @@ class _VotingScreenState extends State<VotingScreen> {
     final hasVoted = voteViewModel.hasVotedForMatch(match.id);
     final userVote = voteViewModel.getVoteForMatch(match.id);
 
-    // Check if match has started (current time is after match start time)
+    // Check if voting is closed (match starts in less than 30 mins)
     final now = DateTime.now();
-    final matchHasStarted = now.isAfter(match.startDate);
+    final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
+    final votingClosed = now.isAfter(cutoffTime);
 
     // Determine the color for each team based on the user's vote
     Color team1Color = Colors.grey.shade200;
@@ -121,12 +122,12 @@ class _VotingScreenState extends State<VotingScreen> {
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
       child: InkWell(
         onTap: () {
-          // Check if match has started
-          if (matchHasStarted) {
-            // If match has started, show voting details
+          // Check if voting is closed
+          if (votingClosed) {
+            // If voting is closed, show voting details
             context.push(AppRoutes.buildVotingDetailsPath(match.id));
           } else {
-            // If match hasn't started yet, show voting options
+            // If voting is still open, show voting options
             _showVotingBottomSheet(context, match, voteViewModel, appState);
           }
         },
@@ -240,7 +241,7 @@ class _VotingScreenState extends State<VotingScreen> {
                   Icon(Icons.info_outline, size: 12, color: Colors.grey[600]),
                   const SizedBox(width: 4),
                   Text(
-                    matchHasStarted
+                    votingClosed
                         ? 'Tap to see voting results'
                         : 'Tap to vote for a team',
                     style: TextStyle(

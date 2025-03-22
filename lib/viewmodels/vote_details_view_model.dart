@@ -47,13 +47,14 @@ class VoteDetailsViewModel with ChangeNotifier {
     _setLoading();
 
     try {
-      // First check if match has started
+      // First check if voting is closed
       if (_match != null) {
         final now = DateTime.now();
-        final matchHasStarted = now.isAfter(_match!.startDate);
+        final cutoffTime = _match!.startDate.subtract(const Duration(minutes: 30));
+        final votingClosed = now.isAfter(cutoffTime);
 
-        // If match hasn't started yet, don't show votes
-        if (!matchHasStarted) {
+        // If voting hasn't closed yet, don't show votes
+        if (!votingClosed) {
           _voteDetails = [];
           _setSuccess();
           return;

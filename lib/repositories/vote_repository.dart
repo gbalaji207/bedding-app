@@ -61,8 +61,10 @@ class VoteRepository {
       // If we have the match data, check if voting is still allowed
       if (match != null) {
         final now = DateTime.now();
-        if (now.isAfter(match.startDate)) {
-          throw Exception('Voting is closed for this match as it has already started');
+        final cutoffTime = match.startDate.subtract(const Duration(minutes: 30));
+
+        if (now.isAfter(cutoffTime)) {
+          throw Exception('Voting is closed for this match as it starts in less than 30 minutes');
         }
       }
 

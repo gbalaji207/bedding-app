@@ -66,12 +66,13 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
           return const Center(child: Text('Match not found'));
         }
 
-        // Check if match has started
+        // Check if voting is closed (match starts in less than 30 mins)
         final now = DateTime.now();
-        final matchHasStarted = now.isAfter(viewModel.match!.startDate);
+        final cutoffTime = viewModel.match!.startDate.subtract(const Duration(minutes: 30));
+        final votingClosed = now.isAfter(cutoffTime);
 
-        // If match hasn't started yet, show a message and navigation back
-        if (!matchHasStarted) {
+        // If voting hasn't closed yet, show a message and navigation back
+        if (!votingClosed) {
           return Scaffold(
             appBar: AppBar(
               title: Text('${viewModel.match!.title}'),
@@ -99,7 +100,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Voting details will be visible after the match starts on ${DateFormat('MMM dd, yyyy - h:mm a').format(viewModel.match!.startDate)}',
+                      'Voting details will be visible once voting closes at ${DateFormat('MMM dd, yyyy - h:mm a').format(viewModel.match!.startDate.subtract(const Duration(minutes: 30)))}',
                       style: const TextStyle(fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
@@ -118,7 +119,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(matchHasStarted
+            title: Text(votingClosed
                 ? '${viewModel.match!.title} - Results'
                 : '${viewModel.match!.title} - Voting Details'),
             elevation: 0,
@@ -214,6 +215,11 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
     final team1Percentage = totalVotes > 0 ? (team1Votes / totalVotes) * 100 : 0.0;
     final team2Percentage = totalVotes > 0 ? (team2Votes / totalVotes) * 100 : 0.0;
 
+    // Check if match has started to adjust the UI
+    final now = DateTime.now();
+    final matchHasStarted = now.isAfter(match.startDate);
+    final isFinished = match.status == MatchStatus.finished;
+
     return Card(
       elevation: 2,
       child: Padding(
@@ -221,9 +227,9 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Vote Distribution',
-              style: TextStyle(
+            Text(
+              matchHasStarted ? 'Voting Results' : 'Current Votes',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -234,7 +240,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
               children: [
                 // Team 1
                 Expanded(
-                  flex: team1Votes,
+                  flex: team1Votes > 0 ? team1Votes : 1,
                   child: Container(
                     height: 40,
                     decoration: BoxDecoration(
@@ -256,7 +262,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
 
                 // Team 2
                 Expanded(
-                  flex: team2Votes,
+                  flex: team2Votes > 0 ? team2Votes : 1,
                   child: Container(
                     height: 40,
                     decoration: BoxDecoration(
@@ -287,6 +293,37 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
                 _buildLegendItem(Colors.orange, match.team2, team2Votes),
               ],
             ),
+
+            // Add winner indicator for finished matches
+            if (isFinished) ...[
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 10),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.emoji_events, color: Colors.amber),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Winner: ${team1Votes > team2Votes ? match.team1 : match.team2}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
