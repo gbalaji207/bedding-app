@@ -32,8 +32,6 @@ class _MatchResultUpdateScreenState extends State<MatchResultUpdateScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize with default values
-    _pointsController.text = '100'; // Default points value
 
     // Load match data
     WidgetsBinding.instance.addPostFrameCallback((_) {

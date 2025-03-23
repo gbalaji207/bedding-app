@@ -1,6 +1,7 @@
 // lib/repositories/match_result_repository.dart
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../models/match_model.dart';
 import '../models/vote_model.dart';
 import '../models/user_profile.dart';
@@ -183,7 +184,7 @@ class MatchResultRepository {
             .from('votes')
             .update({
           'status': 'won',
-          'points': pointsPerCorrectVoter.round(), // Round only at the database update
+          'points': pointsPerCorrectVoter, // Round only at the database update
         })
             .eq('id', vote.id);
 
@@ -205,7 +206,7 @@ class MatchResultRepository {
             .from('votes')
             .update({
           'status': 'lost',
-          'points': -gamePoints.round(), // Round only at the database update
+          'points': -gamePoints, // Round only at the database update
         })
             .eq('id', vote.id);
 
@@ -219,14 +220,33 @@ class MatchResultRepository {
       debugPrint(' - User ${vote.userId}: -$formattedGamePoints points (voted for ${vote.vote})');
     }
 
-    // 4.3 Update non-voters (deduct half game points)
+    // 4.3 Create vote records for non-voters with penalty
     debugPrint('NON-VOTERS (would lose $formattedHalfGamePoints points each):');
     for (final userId in nonVoterIds) {
       if (!_dryRun) {
-        // For non-voters, we don't have a vote record, so we'll just update their points
+        // Create a new vote record for the non-voter with "no_vote" status
+        final nonVoterPenalty = -(gamePoints / 2); // Half the game points as penalty
+
+        // Generate a unique ID for the non-voter vote record
+        const uuid = Uuid();
+        final voteId = uuid.v4();
+
+        // Create a vote record with "no_vote" status and the penalty points
+        await _supabase
+            .from('votes')
+            .insert({
+          'id': voteId,
+          'user_id': userId,
+          'match_id': match.id,
+          'vote': '', // Special value for non-voters
+          'status': 'no_vote',    // Special status for non-voters
+          'points': nonVoterPenalty, // Negative points as penalty
+        });
+
+        // Update user points in profile
         // await _updateUserPoints(
         //   userId: userId,
-        //   pointsChange: -(gamePoints / 2).round(),
+        //   pointsChange: nonVoterPenalty,
         //   matchId: match.id,
         //   reason: 'match_result_non_voter',
         // );
@@ -290,7 +310,7 @@ class MatchResultRepository {
             .from('votes')
             .update({
           'status': 'won',
-          'points': pointsPerCorrectVoter.round(), // Round only at the database update
+          'points': pointsPerCorrectVoter, // Round only at the database update
         })
             .eq('id', vote.id);
 

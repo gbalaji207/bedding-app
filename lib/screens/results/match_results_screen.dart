@@ -37,8 +37,10 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
     });
 
     try {
-      final matchRepository = Provider.of<MatchRepository>(context, listen: false);
-      final voteRepository = Provider.of<VoteRepository>(context, listen: false);
+      final matchRepository =
+      Provider.of<MatchRepository>(context, listen: false);
+      final voteRepository =
+      Provider.of<VoteRepository>(context, listen: false);
       final appState = Provider.of<AppState>(context, listen: false);
 
       // Get past matches directly from the database
@@ -49,10 +51,7 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
         final votes = await voteRepository.getUserVotes(appState.user!.id);
 
         // Create a map of matchId -> Vote object
-        _userVotes = {
-          for (var vote in votes)
-            vote.matchId: vote
-        };
+        _userVotes = {for (var vote in votes) vote.matchId: vote};
       }
 
       setState(() {
@@ -139,7 +138,9 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
             children: [
               // Title with match type
               Text(
-                '${match.title} - ${match.type == MatchType.fixed ? 'Fixed' : 'Variable'}',
+                '${match.title} - ${match.type == MatchType.fixed
+                    ? 'Fixed'
+                    : 'Variable'}',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -218,10 +219,6 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Show points if match is finished and user voted
-                  if (isFinished && hasVoted)
-                    _buildPointsIndicator(match, userVote),
-
                   // Show voted team if user casted a vote (align right)
                   if (hasVoted)
                     Chip(
@@ -236,6 +233,10 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+
+                  // Show points if match is finished and user voted
+                  if (isFinished && hasVoted)
+                    _buildPointsIndicator(match, userVote),
                 ],
               ),
             ],
@@ -273,7 +274,8 @@ class _MatchResultsScreenState extends State<MatchResultsScreen> {
           ),
           const SizedBox(width: 4),
           Text(
-            wonVote ? '+$points pts' : '0 pts',
+            // Display actual points with decimal places if needed
+            wonVote ? '+${points is int ? points : points.toStringAsFixed(2)}' : '${points is int ? points : points.toStringAsFixed(2)}',
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: wonVote ? Colors.green.shade800 : Colors.red.shade800,

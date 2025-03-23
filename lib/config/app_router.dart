@@ -167,7 +167,6 @@ class AppRouter {
 
           // Return the screen with the providers it needs
           return Scaffold(
-            appBar: AppBar(title: const Text('Update Match Result')),
             body: MultiProvider(
               providers: [
                 // Provide the match result repository

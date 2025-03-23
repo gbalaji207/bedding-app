@@ -5,7 +5,7 @@ class Vote {
   final String matchId;
   final String vote; // team1 or team2
   final String status; // new, won, lost
-  final int points;
+  final double points;
 
   Vote({
     required this.id,
@@ -24,7 +24,7 @@ class Vote {
       matchId: json['match_id'] as String,
       vote: json['vote'] as String,
       status: json['status'] as String,
-      points: json['points'] as int? ?? 0,
+      points: json['points'] as double? ?? 0,
     );
   }
 
@@ -61,7 +61,7 @@ class Vote {
   Vote copyWith({
     String? vote,
     String? status,
-    int? points,
+    double? points,
   }) {
     return Vote(
       id: this.id,

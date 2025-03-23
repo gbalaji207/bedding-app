@@ -53,7 +53,8 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
     });
 
     try {
-      final viewModel = Provider.of<VoteDetailsViewModel>(context, listen: false);
+      final viewModel =
+          Provider.of<VoteDetailsViewModel>(context, listen: false);
       // Use the viewModel to fetch all users
       _allUsers = await viewModel.getAllUsers();
     } catch (e) {
@@ -178,13 +179,6 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
         ? _getEffectiveVotesForFixedMatch(votes, match)
         : _sortVotesForVariableMatch(votes, match);
 
-    // Count votes for each team
-    final team1Votes = effectiveVotes.where((v) => v.vote.vote == match.team1).length;
-    final team2Votes = effectiveVotes.where((v) => v.vote.vote == match.team2).length;
-
-    // For fixed matches, count non-voters too
-    final nonVoters = isFixedMatch ? _allUsers.length - votes.length : 0;
-
     return RefreshIndicator(
       onRefresh: _loadData,
       child: SingleChildScrollView(
@@ -198,7 +192,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
             const SizedBox(height: 24),
 
             // Vote summary
-            _buildVoteSummary(match, team1Votes, team2Votes, nonVoters),
+            _buildVoteSummary(match, viewModel.voteDetails),
             const SizedBox(height: 20),
 
             // Votes list
@@ -210,7 +204,8 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
   }
 
   // Helper method to create effective votes list for fixed matches (including non-voters)
-  List<VoteDetails> _getEffectiveVotesForFixedMatch(List<VoteDetails> actualVotes, Match match) {
+  List<VoteDetails> _getEffectiveVotesForFixedMatch(
+      List<VoteDetails> actualVotes, Match match) {
     // Create a map of userId -> VoteDetails to check if a user has voted
     final Map<String, VoteDetails> votesByUserId = {
       for (var vote in actualVotes) vote.vote.userId: vote
@@ -270,7 +265,8 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
   }
 
   // Helper method to sort votes for variable matches (team1 then team2)
-  List<VoteDetails> _sortVotesForVariableMatch(List<VoteDetails> votes, Match match) {
+  List<VoteDetails> _sortVotesForVariableMatch(
+      List<VoteDetails> votes, Match match) {
     final team1 = match.team1;
     final sortedVotes = List<VoteDetails>.from(votes);
 
@@ -339,7 +335,13 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
     );
   }
 
-  Widget _buildVoteSummary(Match match, int team1Votes, int team2Votes, int nonVoters) {
+  Widget _buildVoteSummary(Match match, List<VoteDetails> voteDetails) {
+    // Count votes for each team and non-voters based on vote status
+    final team1Votes = voteDetails.where((v) => v.vote.vote == match.team1).length;
+    final team2Votes = voteDetails.where((v) => v.vote.vote == match.team2).length;
+    final nonVoters = voteDetails.where((v) => v.vote.status == 'no_vote').length;
+
+    // Calculate totals based on match type
     final totalVoters = team1Votes + team2Votes;
     final totalUsers = totalVoters + nonVoters;
 
@@ -596,32 +598,47 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
       );
     }
 
-    // Count users in each category for section headers
-    final team1Voters = effectiveVotes.where((v) => v.vote.vote == match.team1).length;
-    final team2Voters = effectiveVotes.where((v) => v.vote.vote == match.team2).length;
-    final nonVoterCount = effectiveVotes.where((v) => v.vote.status == 'non-voter').length;
+    // Check if match is finished to show points
+    final bool isFinished = match.status == MatchStatus.finished;
 
-    // Always show sections (for both fixed and variable matches)
-    final bool showSections = true;
+    // Sort votes: Team1 first, Team2 second, Non-voters last
+    // Within each category, sort alphabetically
+    final sortedVotes = List<VoteDetails>.from(effectiveVotes);
+    sortedVotes.sort((a, b) {
+      // Determine the sorting category
+      int getCategoryValue(VoteDetails vote) {
+        if (vote.vote.status == 'no_vote') return 2; // Non-voters last
+        if (vote.vote.vote == match.team1) return 0; // Team1 first
+        return 1; // Team2 second
+      }
+
+      final aCat = getCategoryValue(a);
+      final bCat = getCategoryValue(b);
+
+      // If categories differ, sort by category
+      if (aCat != bCat) return aCat.compareTo(bCat);
+
+      // Within same category, sort alphabetically
+      return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+    });
+
+    // Count votes for section headers
+    final team1Votes =
+        sortedVotes.where((v) => v.vote.vote == match.team1).length;
+    final team2Votes =
+        sortedVotes.where((v) => v.vote.vote == match.team2).length;
+    final nonVoterCount =
+        sortedVotes.where((v) => v.vote.status == 'no_vote').length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          match.type == MatchType.fixed ? 'All Users' : 'Votes',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // First section header for Team 1 (if we're showing sections)
-        if (showSections && team1Voters > 0) ...[
+        // First section header for Team 1
+        if (team1Votes > 0) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Text(
-              '${match.team1} ($team1Voters)',
+              '${match.team1} ($team1Votes)',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -634,12 +651,12 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: effectiveVotes.length,
+          itemCount: sortedVotes.length,
           separatorBuilder: (context, index) {
-            if (showSections && index < effectiveVotes.length - 1) {
+            if (index < sortedVotes.length - 1) {
               // Check for section transitions
-              final currentVote = effectiveVotes[index];
-              final nextVote = effectiveVotes[index + 1];
+              final currentVote = sortedVotes[index];
+              final nextVote = sortedVotes[index + 1];
 
               // Transition from Team 1 to Team 2
               if (currentVote.vote.vote == match.team1 &&
@@ -651,7 +668,7 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
                       child: Text(
-                        '${match.team2} ($team2Voters)',
+                        '${match.team2} ($team2Votes)',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -663,10 +680,9 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
                 );
               }
 
-              // Transition to Non-voters (only for fixed matches)
-              if (match.type == MatchType.fixed &&
-                  nextVote.vote.status == 'non-voter' &&
-                  currentVote.vote.status != 'non-voter') {
+              // Transition to Non-voters
+              if (nextVote.vote.status == 'no_vote' &&
+                  currentVote.vote.status != 'no_vote') {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -691,15 +707,14 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
             return const Divider();
           },
           itemBuilder: (context, index) {
-            final voteDetails = effectiveVotes[index];
-            final String voteValue = voteDetails.vote.vote;
-            final bool isNonVoter = voteDetails.vote.status == 'non-voter';
+            final voteDetails = sortedVotes[index];
+            final bool isNonVoter = voteDetails.vote.status == 'no_vote';
 
             // Set color based on vote
             Color voteColor;
             if (isNonVoter) {
               voteColor = Colors.grey;
-            } else if (voteValue == match.team1) {
+            } else if (voteDetails.vote.vote == match.team1) {
               voteColor = Colors.blue;
             } else {
               voteColor = Colors.orange;
@@ -716,27 +731,76 @@ class _VotingDetailsScreenState extends State<VotingDetailsScreen> {
                 ),
               ),
               title: Text(voteDetails.displayName),
-              subtitle: Text(isNonVoter ? 'Did not vote' : 'Voted: ${voteDetails.vote.vote}'),
-              trailing: isNonVoter
-                  ? const Icon(Icons.how_to_vote_outlined, color: Colors.grey)
+              subtitle: Text(isNonVoter
+                  ? 'Did not vote'
+                  : 'Voted: ${voteDetails.vote.vote}'),
+
+              // Display points for all users when match is finished
+              trailing: isFinished
+                  ? _buildPointsIndicator(voteDetails.vote)
                   : Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: voteColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  voteDetails.vote.vote,
-                  style: TextStyle(
-                    color: voteColor.withOpacity(0.8),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: voteColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        isNonVoter ? 'No Vote' : voteDetails.vote.vote,
+                        style: TextStyle(
+                          color: voteColor.withOpacity(0.8),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
             );
           },
         ),
       ],
+    );
+  }
+
+// Helper widget to display points for each user
+  Widget _buildPointsIndicator(Vote vote) {
+    final bool wonVote = vote.status == 'won';
+    final bool isNonVoter = vote.status == 'no_vote';
+    final points = vote.points;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        // Non-voters and lost votes get red background, won votes get green
+        color: (isNonVoter || !wonVote)
+            ? Colors.red.shade100
+            : Colors.green.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: (isNonVoter || !wonVote) ? Colors.red : Colors.green,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            (isNonVoter || !wonVote) ? Icons.cancel : Icons.check_circle,
+            size: 14,
+            color: (isNonVoter || !wonVote) ? Colors.red : Colors.green,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            // Format points with decimal places as needed
+            wonVote
+                ? '+${points is int ? points : points.toStringAsFixed(2)}'
+                : '${points is int ? points : points.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: (isNonVoter || !wonVote)
+                  ? Colors.red.shade800
+                  : Colors.green.shade800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

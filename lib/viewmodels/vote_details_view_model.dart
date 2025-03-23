@@ -67,7 +67,7 @@ class VoteDetailsViewModel with ChangeNotifier {
         }
       }
 
-      // Get all votes for the match
+      // Get all votes for the match (including no_vote records)
       final votes = await _voteRepository.getMatchVotes(matchId);
       debugPrint('Loaded ${votes.length} votes for match $matchId');
 
