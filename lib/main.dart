@@ -1,11 +1,14 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:voting_app/providers/auth_provider.dart';
 import 'package:voting_app/repositories/match_repository.dart';
 import 'package:voting_app/repositories/vote_repository.dart';
+import 'package:voting_app/repositories/user_points_repository.dart';
 import 'package:voting_app/viewmodels/match_view_model.dart';
 import 'package:voting_app/viewmodels/vote_view_model.dart';
+import 'package:voting_app/viewmodels/user_points_view_model.dart';
 
 import 'config/app_router.dart';
 import 'config/theme.dart';
@@ -45,6 +48,10 @@ class MyApp extends StatelessWidget {
         Provider<VoteRepository>(
           create: (_) => VoteRepository(supabase),
         ),
+        // User Points repository
+        Provider<UserPointsRepository>(
+          create: (_) => UserPointsRepository(supabase),
+        ),
         // Match view model
         ChangeNotifierProxyProvider<MatchRepository, MatchViewModel>(
           create: (context) => MatchViewModel(
@@ -61,6 +68,14 @@ class MyApp extends StatelessWidget {
           ),
           update: (context, voteRepository, matchRepository, previous) =>
           previous ?? VoteViewModel(voteRepository, matchRepository),
+        ),
+        // User Points view model
+        ChangeNotifierProxyProvider<UserPointsRepository, UserPointsViewModel>(
+          create: (context) => UserPointsViewModel(
+            Provider.of<UserPointsRepository>(context, listen: false),
+          ),
+          update: (context, repository, previous) =>
+          previous ?? UserPointsViewModel(repository),
         ),
       ],
       child: const AppWithRouter(),

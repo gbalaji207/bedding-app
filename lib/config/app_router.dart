@@ -1,4 +1,4 @@
-// lib/config/app_router.dart
+// lib/config/app_router.dart - Updated Points Screen route
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +9,8 @@ import 'package:voting_app/screens/voting/voting_screen.dart';
 import 'package:voting_app/screens/profile/profile_screen.dart';
 import 'package:voting_app/screens/profile/change_password_screen.dart';
 import 'package:voting_app/viewmodels/vote_details_view_model.dart';
+import 'package:voting_app/viewmodels/user_points_view_model.dart';  // Import the ViewModel
+import 'package:voting_app/repositories/user_points_repository.dart';  // Import the Repository
 
 import '../providers/auth_provider.dart';
 import '../repositories/match_repository.dart';
@@ -93,10 +95,16 @@ class AppRouter {
               child: const MatchResultsScreen(),
             ),
           ),
+          // Updated Points Screen route with the UserPointsViewModel
           GoRoute(
             path: AppRoutes.points,
             name: AppRoutes.pointsName,
-            builder: (context, state) => const PointsScreen(),
+            builder: (context, state) => ChangeNotifierProvider(
+              create: (context) => UserPointsViewModel(
+                Provider.of<UserPointsRepository>(context, listen: false),
+              ),
+              child: const PointsScreen(),
+            ),
           ),
           GoRoute(
             path: AppRoutes.voting,
@@ -130,9 +138,9 @@ class AppRouter {
         builder: (context, state) {
           // First check if matchId is passed as an extra
           final Map<String, dynamic>? extras =
-              state.extra as Map<String, dynamic>?;
+          state.extra as Map<String, dynamic>?;
           final String? matchId =
-              extras != null ? extras['matchId'] as String? : null;
+          extras != null ? extras['matchId'] as String? : null;
 
           return Scaffold(
             appBar: AppBar(
@@ -174,7 +182,7 @@ class AppRouter {
                   create: (context) => MatchResultRepository(
                     Supabase.instance.client,
                     dryRun:
-                        false, // Set to true for dry run mode, false for actual database updates
+                    false, // Set to true for dry run mode, false for actual database updates
                   ),
                 ),
                 // Provide the match result view model
