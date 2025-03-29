@@ -1,7 +1,9 @@
 // lib/screens/points/points_screen.dart
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../utils/constants.dart';
 import '../../viewmodels/user_points_view_model.dart';
 import '../../repositories/user_points_repository.dart';
 
@@ -86,10 +88,21 @@ class _PointsScreenState extends State<PointsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: const [
-              SizedBox(width: 40, child: Text('Rank', style: TextStyle(fontWeight: FontWeight.bold))),
+              SizedBox(
+                  width: 40,
+                  child: Text('Rank',
+                      style: TextStyle(fontWeight: FontWeight.bold))),
               SizedBox(width: 8),
-              Expanded(flex: 3, child: Text('User', style: TextStyle(fontWeight: FontWeight.bold))),
-              SizedBox(width: 60, child: Text('Points', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center)),
+              Expanded(
+                  flex: 3,
+                  child: Text('User',
+                      style: TextStyle(fontWeight: FontWeight.bold))),
+              SizedBox(
+                  width: 60,
+                  child: Text('Points',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      textAlign: TextAlign.center)),
             ],
           ),
         ),
@@ -106,38 +119,52 @@ class _PointsScreenState extends State<PointsScreen> {
               return Card(
                 elevation: isTopThree ? 3 : 1,
                 margin: EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: isTopThree ? 4 : 2
-                ),
+                    horizontal: 8, vertical: isTopThree ? 4 : 2),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                   side: isTopThree
                       ? BorderSide(color: _getRankColor(rank), width: 1.5)
                       : BorderSide.none,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: ListTile(
-                    leading: _buildRankWidget(rank),
-                    title: Text(
-                      user['displayName'],
-                      style: TextStyle(
-                        fontWeight: isTopThree ? FontWeight.bold : FontWeight.normal,
-                        fontSize: isTopThree ? 16 : 14,
-                      ),
-                    ),
-                    // Removed user role subtitle
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _getPointsBackgroundColor(rank),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        '${user['totalPoints'].toStringAsFixed(2)}',
+                child: InkWell(
+                  onTap: () {
+                    // Navigate to user point details screen
+                    context.pushNamed(
+                      AppRoutes.userPointDetailsName,
+                      pathParameters: {'userId': user['id']},
+                      extra: {'userName': user['displayName']},
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: ListTile(
+                      leading: _buildRankWidget(rank),
+                      title: Text(
+                        user['displayName'],
                         style: TextStyle(
-                          fontWeight: isTopThree ? FontWeight.bold : FontWeight.normal,
-                          color: Colors.black87, // Always use dark text for better contrast
+                          fontWeight:
+                              isTopThree ? FontWeight.bold : FontWeight.normal,
+                          fontSize: isTopThree ? 16 : 14,
+                        ),
+                      ),
+                      // Removed user role subtitle
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _getPointsBackgroundColor(rank),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          '${user['totalPoints'].toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: isTopThree
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: Colors
+                                .black87, // Always use dark text for better contrast
+                          ),
                         ),
                       ),
                     ),
@@ -159,9 +186,8 @@ class _PointsScreenState extends State<PointsScreen> {
     }
 
     // Get top 3 users for podium display
-    final topUsers = rankedUsers.length >= 3
-        ? rankedUsers.sublist(0, 3)
-        : rankedUsers;
+    final topUsers =
+        rankedUsers.length >= 3 ? rankedUsers.sublist(0, 3) : rankedUsers;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
@@ -177,7 +203,7 @@ class _PointsScreenState extends State<PointsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '${rankedUsers.length} users - ${totalPoints.toStringAsFixed(2)} total points',
+            '${rankedUsers.length} users',
             style: TextStyle(
               color: Colors.grey.shade600,
               fontSize: 14,
@@ -186,8 +212,7 @@ class _PointsScreenState extends State<PointsScreen> {
           const SizedBox(height: 24),
 
           // Podium for top 3
-          if (rankedUsers.isNotEmpty)
-            _buildPodium(topUsers),
+          if (rankedUsers.isNotEmpty) _buildPodium(topUsers),
         ],
       ),
     );
@@ -196,7 +221,8 @@ class _PointsScreenState extends State<PointsScreen> {
   Widget _buildPodium(List<Map<String, dynamic>> topUsers) {
     // Make sure we have up to 3 users with placeholders
     while (topUsers.length < 3) {
-      topUsers.add({'displayName': '', 'totalPoints': 0, 'rank': topUsers.length + 1});
+      topUsers.add(
+          {'displayName': '', 'totalPoints': 0, 'rank': topUsers.length + 1});
     }
 
     return Row(
@@ -230,8 +256,12 @@ class _PointsScreenState extends State<PointsScreen> {
               backgroundColor: _getRankColor(rank),
               child: Text(
                 // Safely get the first character
-                (user['displayName'] != null && user['displayName'].toString().isNotEmpty)
-                    ? user['displayName'].toString().substring(0, 1).toUpperCase()
+                (user['displayName'] != null &&
+                        user['displayName'].toString().isNotEmpty)
+                    ? user['displayName']
+                        .toString()
+                        .substring(0, 1)
+                        .toUpperCase()
                     : '?',
                 style: const TextStyle(
                   color: Colors.white,
@@ -264,7 +294,8 @@ class _PointsScreenState extends State<PointsScreen> {
             height: height,
             decoration: BoxDecoration(
               color: _getRankColor(rank),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(8)),
             ),
             child: Center(
               child: Text(
@@ -325,7 +356,8 @@ class _PointsScreenState extends State<PointsScreen> {
       case 3:
         return Colors.brown.shade400; // Bronze
       default:
-        return Colors.grey.shade300; // Darker grey for better contrast with text
+        return Colors
+            .grey.shade300; // Darker grey for better contrast with text
     }
   }
 }

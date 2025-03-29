@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:voting_app/providers/auth_provider.dart';
 import 'package:voting_app/repositories/match_repository.dart';
+import 'package:voting_app/repositories/user_point_history_repository.dart';
 import 'package:voting_app/repositories/vote_repository.dart';
 import 'package:voting_app/repositories/user_points_repository.dart';
 import 'package:voting_app/viewmodels/match_view_model.dart';
@@ -19,7 +20,7 @@ Future<void> main() async {
   await Supabase.initialize(
     url: 'https://njhquvqalvjbhbmsxbjb.supabase.co',
     anonKey:
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5qaHF1dnFhbHZqYmhibXN4YmpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI1NTE3MTAsImV4cCI6MjA1ODEyNzcxMH0.GL-oqFF1ec45NDFJ_gToplBcpmFITjfSR25Og_tpjZg',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5qaHF1dnFhbHZqYmhibXN4YmpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI1NTE3MTAsImV4cCI6MjA1ODEyNzcxMH0.GL-oqFF1ec45NDFJ_gToplBcpmFITjfSR25Og_tpjZg',
   );
 
   runApp(const MyApp());
@@ -52,22 +53,26 @@ class MyApp extends StatelessWidget {
         Provider<UserPointsRepository>(
           create: (_) => UserPointsRepository(supabase),
         ),
+        Provider<UserPointHistoryRepository>(
+          create: (_) => UserPointHistoryRepository(supabase),
+        ),
         // Match view model
         ChangeNotifierProxyProvider<MatchRepository, MatchViewModel>(
           create: (context) => MatchViewModel(
             Provider.of<MatchRepository>(context, listen: false),
           ),
           update: (context, repository, previous) =>
-          previous ?? MatchViewModel(repository),
+              previous ?? MatchViewModel(repository),
         ),
         // Vote view model
-        ChangeNotifierProxyProvider2<VoteRepository, MatchRepository, VoteViewModel>(
+        ChangeNotifierProxyProvider2<VoteRepository, MatchRepository,
+            VoteViewModel>(
           create: (context) => VoteViewModel(
             Provider.of<VoteRepository>(context, listen: false),
             Provider.of<MatchRepository>(context, listen: false),
           ),
           update: (context, voteRepository, matchRepository, previous) =>
-          previous ?? VoteViewModel(voteRepository, matchRepository),
+              previous ?? VoteViewModel(voteRepository, matchRepository),
         ),
         // User Points view model
         ChangeNotifierProxyProvider<UserPointsRepository, UserPointsViewModel>(
@@ -75,7 +80,7 @@ class MyApp extends StatelessWidget {
             Provider.of<UserPointsRepository>(context, listen: false),
           ),
           update: (context, repository, previous) =>
-          previous ?? UserPointsViewModel(repository),
+              previous ?? UserPointsViewModel(repository),
         ),
       ],
       child: const AppWithRouter(),

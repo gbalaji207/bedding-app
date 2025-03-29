@@ -26,6 +26,8 @@ class AppRoutes {
   static const String matchResultUpdateName = 'matchResultUpdate';
   static const String resultsName = 'results';
   static const String pointsName = 'points';
+  static const String userPointDetails = '/points/user/:userId';
+  static const String userPointDetailsName = 'userPointDetails';
   static const String votingName = 'voting'; // Route name for voting
   static const String votingDetailsName = 'votingDetails'; // Route name for voting details
   static const String profileName = 'profile'; // Route name for user profile
@@ -35,4 +37,5 @@ class AppRoutes {
   static String buildMatchDetailsPath(String matchId) => '/matches/details/$matchId';
   static String buildMatchResultUpdatePath(String matchId) => '/matches/result/$matchId';
   static String buildVotingDetailsPath(String matchId) => '/voting/details/$matchId';
+  static String buildUserPointDetailsPath(String userId) => '/points/user/$userId';
 }
