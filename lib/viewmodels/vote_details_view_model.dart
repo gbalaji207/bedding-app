@@ -307,10 +307,11 @@ class VoteDetailsViewModel with ChangeNotifier {
     // Check if match is finished
     final isFinished = _match!.status == MatchStatus.finished;
 
-    // Determine winner if match is finished
+    // Use the actual winner field from the match if it's finished
     String? winner;
-    if (isFinished && (team1Votes > 0 || team2Votes > 0)) {
-      winner = team1Votes > team2Votes ? _match!.team1 : _match!.team2;
+    if (isFinished) {
+      // Get the winner directly from the match data
+      winner = _match!.winner;
     }
 
     return {
@@ -345,10 +346,11 @@ class VoteDetailsViewModel with ChangeNotifier {
     // Check if match is finished
     final isFinished = _match!.status == MatchStatus.finished;
 
-    // Determine winner if match is finished
+    // Use the actual winner field from the match if it's finished
     String? winner;
-    if (isFinished && totalVotes > 0) {
-      winner = team1Votes > team2Votes ? _match!.team1 : _match!.team2;
+    if (isFinished) {
+      // Get the winner directly from the match data
+      winner = _match!.winner;
     }
 
     return {

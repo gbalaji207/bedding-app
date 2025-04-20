@@ -13,6 +13,7 @@ class Match {
   final MatchType type;
   final DateTime startDate;
   final MatchStatus status;
+  final String? winner;
 
   Match({
     required this.id,
@@ -22,6 +23,7 @@ class Match {
     required this.type,
     required this.startDate,
     required this.status,
+    this.winner,
   });
 
   // Factory constructor to create a Match from JSON data
@@ -39,6 +41,7 @@ class Match {
       type: _parseMatchType(json['type'] as String),
       startDate: localStartDate,
       status: _parseMatchStatus(json['status'] as String),
+      winner: json['winner'] as String?,
     );
   }
 
@@ -91,6 +94,9 @@ class Match {
     return cutoff.difference(now);
   }
 
+  // Check if there's a winner
+  bool get hasWinner => winner != null && winner!.isNotEmpty;
+
   // Convert to JSON
   Map<String, dynamic> toJson() {
     return {
@@ -101,6 +107,7 @@ class Match {
       'type': type == MatchType.fixed ? 'fixed' : 'variable',
       'start_date': startDate.toUtc().toIso8601String(), // Convert back to UTC for storage
       'status': status.toString().split('.').last,
+      'winner': winner,
     };
   }
 }
