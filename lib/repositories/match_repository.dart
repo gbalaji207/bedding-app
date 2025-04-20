@@ -25,18 +25,13 @@ class MatchRepository {
   // Get future matches (matches that haven't started yet)
   Future<List<Match>> getFutureMatches() async {
     try {
-      // Create a UTC DateTime and convert to ISO string for database comparison
-      final now = DateTime.now().toUtc().toIso8601String();
-
-      debugPrint('Getting future matches from: $now');
-
+      // Call the stored procedure
       final response = await _supabaseClient
-          .from('matches')
-          .select()
-          .gte('start_date', now) // Greater than or equal to current time
-          .order('start_date', ascending: true);
+          .rpc('get_future_matches');
 
-      // Convert to local time in Match.fromJson constructor
+      debugPrint('Got ${response.length} future matches from server procedure');
+
+      // Convert to Match objects
       return response.map<Match>((json) => Match.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to load future matches: $e');
@@ -46,18 +41,12 @@ class MatchRepository {
   // Get past matches (matches that have already started)
   Future<List<Match>> getPastMatches() async {
     try {
-      // Create a UTC DateTime and convert to ISO string for database comparison
-      final now = DateTime.now().toUtc().toIso8601String();
+      // Call the stored procedure
+      final response = await _supabaseClient.rpc('get_past_matches');
 
-      debugPrint('Getting past matches before: $now');
+      debugPrint('Got ${response.length} past matches from server procedure');
 
-      final response = await _supabaseClient
-          .from('matches')
-          .select()
-          .lt('start_date', now) // Less than current time
-          .order('start_date', ascending: false); // Most recent first
-
-      // Convert to local time in Match.fromJson constructor
+      // Convert to Match objects
       return response.map<Match>((json) => Match.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to load past matches: $e');
@@ -67,11 +56,8 @@ class MatchRepository {
   // Get a specific match by ID
   Future<Match> getMatchById(String id) async {
     try {
-      final response = await _supabaseClient
-          .from('matches')
-          .select()
-          .eq('id', id)
-          .single();
+      final response =
+          await _supabaseClient.from('matches').select().eq('id', id).single();
 
       // Convert to local time in Match.fromJson constructor
       return Match.fromJson(response);
@@ -84,9 +70,7 @@ class MatchRepository {
   Future<void> createMatch(Match match) async {
     try {
       // Match.toJson handles converting local time to UTC for storage
-      await _supabaseClient
-          .from('matches')
-          .insert(match.toJson());
+      await _supabaseClient.from('matches').insert(match.toJson());
     } catch (e) {
       throw Exception('Failed to create match: $e');
     }
@@ -108,10 +92,7 @@ class MatchRepository {
   // Delete a match
   Future<void> deleteMatch(String id) async {
     try {
-      await _supabaseClient
-          .from('matches')
-          .delete()
-          .eq('id', id);
+      await _supabaseClient.from('matches').delete().eq('id', id);
     } catch (e) {
       throw Exception('Failed to delete match: $e');
     }
