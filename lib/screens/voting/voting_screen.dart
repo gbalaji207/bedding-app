@@ -158,11 +158,11 @@ class _VotingScreenState extends State<VotingScreen> {
   }
 
   Widget _buildMatchCard(
-      BuildContext context,
-      Match match,
-      VoteViewModel voteViewModel,
-      AppState appState,
-      ) {
+    BuildContext context,
+    Match match,
+    VoteViewModel voteViewModel,
+    AppState appState,
+  ) {
     // Check if user has already voted for this match
     final hasVoted = voteViewModel.hasVotedForMatch(match.id);
     final userVote = voteViewModel.getVoteForMatch(match.id);
@@ -237,7 +237,8 @@ class _VotingScreenState extends State<VotingScreen> {
                   ),
                   if (closeToCutoff)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.amber.shade50,
                         borderRadius: BorderRadius.circular(12),
@@ -246,7 +247,8 @@ class _VotingScreenState extends State<VotingScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.timer, size: 12, color: Colors.amber.shade800),
+                          Icon(Icons.timer,
+                              size: 12, color: Colors.amber.shade800),
                           const SizedBox(width: 4),
                           Text(
                             timeUntilCutoff.inMinutes > 60
@@ -336,7 +338,33 @@ class _VotingScreenState extends State<VotingScreen> {
                       fontSize: 14,
                     ),
                   ),
-                  _buildVoteStatusChip(hasVoted, userVote),
+                  // If the user has voted, show a row with the vote status chip and a delete button
+                  if (hasVoted)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildVoteStatusChip(hasVoted, userVote),
+                        const SizedBox(width: 8),
+                        // Delete button
+                        InkWell(
+                          onTap: () {
+                            _showDeleteVoteConfirmation(
+                                context, match, voteViewModel, appState);
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: Icon(
+                              Icons.delete_outline,
+                              color: Colors.red.shade300,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    _buildVoteStatusChip(hasVoted, userVote),
                 ],
               ),
             ],
@@ -365,18 +393,18 @@ class _VotingScreenState extends State<VotingScreen> {
       );
     }
 
-    final isTeam1 = true; // You need to determine if vote is for team1
-    final color = isTeam1 ? Colors.blue.shade100 : Colors.orange.shade100;
-    final textColor = isTeam1 ? Colors.blue.shade800 : Colors.orange.shade800;
+    // For existing votes, we just use orange color by default
+    // since we can't easily access the match data to determine team1/team2
+    final color = Colors.blue.shade100;
+    final textColor = Colors.blue.shade800;
+    final borderColor = Colors.blue.shade300;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isTeam1 ? Colors.blue.shade300 : Colors.orange.shade300,
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: Text(
         'Voted: ${vote.vote}',
@@ -390,16 +418,17 @@ class _VotingScreenState extends State<VotingScreen> {
   }
 
   void _showDeleteVoteConfirmation(
-      BuildContext context,
-      Match match,
-      VoteViewModel voteViewModel,
-      AppState appState,
-      ) {
+    BuildContext context,
+    Match match,
+    VoteViewModel voteViewModel,
+    AppState appState,
+  ) {
     // Real-time check for cutoff time
     if (match.isVotingClosed()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Voting is now closed for this match. You cannot delete your vote.'),
+          content: Text(
+              'Voting is now closed for this match. You cannot delete your vote.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -409,17 +438,66 @@ class _VotingScreenState extends State<VotingScreen> {
       return;
     }
 
+    // Get theme colors
+    final primaryColor = Theme.of(context).primaryColor;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Vote'),
-        content: Text('Are you sure you want to delete your vote for ${match.title}?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.delete_outline, color: Colors.red.shade600, size: 28),
+            const SizedBox(width: 10),
+            const Text('Delete Vote'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                'Are you sure you want to delete your vote for ${match.title}?'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      color: Colors.orange.shade800, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You can vote again until ${DateFormat('h:mm a').format(match.votingCutoffTime)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              foregroundColor: Colors.grey.shade700,
+              side: BorderSide(color: Colors.grey.shade400),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () async {
               Navigator.pop(context); // Close dialog
 
@@ -428,7 +506,8 @@ class _VotingScreenState extends State<VotingScreen> {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Voting period has ended. Your vote cannot be deleted now.'),
+                      content: Text(
+                          'Voting period has ended. Your vote cannot be deleted now.'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -460,6 +539,9 @@ class _VotingScreenState extends State<VotingScreen> {
                         backgroundColor: Colors.green,
                       ),
                     );
+
+                    // Reload the data to refresh the UI
+                    _loadData();
                   }
                 } catch (e) {
                   if (context.mounted) {
@@ -473,7 +555,15 @@ class _VotingScreenState extends State<VotingScreen> {
                 }
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Delete',
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -481,12 +571,13 @@ class _VotingScreenState extends State<VotingScreen> {
   }
 
   void _showVotingBottomSheet(
-      BuildContext context,
-      Match match,
-      VoteViewModel voteViewModel,
-      AppState appState,
-      ) {
-    debugPrint("_showVotingBottomSheet - isVotingClosed: ${match.isVotingClosed()}");
+    BuildContext context,
+    Match match,
+    VoteViewModel voteViewModel,
+    AppState appState,
+  ) {
+    debugPrint(
+        "_showVotingBottomSheet - isVotingClosed: ${match.isVotingClosed()}");
     // Real-time check for cutoff time when voting dialog opens
     if (match.isVotingClosed()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -512,9 +603,14 @@ class _VotingScreenState extends State<VotingScreen> {
     // Timestamp when the sheet is shown - to later calculate if too much time has passed
     final sheetOpenedTime = DateTime.now();
 
+    // Get the app theme colors
+    const primaryColor = Colors.blue;
+    final textTheme = Theme.of(context).textTheme;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -523,69 +619,113 @@ class _VotingScreenState extends State<VotingScreen> {
           builder: (context, setState) {
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                top: 24,
-                left: 24,
-                right: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                top: 20,
+                left: 20,
+                right: 20,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Vote for ${match.title}',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                  // Bottom sheet handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 8),
 
-                  // Show the cutoff time
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  // Title with match details
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Icon(Icons.timer, size: 16, color: Colors.grey[600]),
-                      const SizedBox(width: 8),
                       Text(
-                        'Voting closes at ${DateFormat('h:mm a').format(match.votingCutoffTime)}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
+                        'Vote for Match',
+                        style: textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ) ??
+                            const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        match.title,
+                        style: textTheme.titleMedium ??
+                            const TextStyle(fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Cutoff time indicator with themed colors
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.timer,
+                                size: 16, color: Colors.orange.shade800),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Voting closes at ${DateFormat('h:mm a').format(match.votingCutoffTime)}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.orange.shade800,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 24),
 
-                  const Text(
+                  // Teams header
+                  Text(
                     'Select a team to vote:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    style: textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ) ??
+                        const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 16),
 
-                  // Team 1 Option - Custom radio button style
+                  // Team 1 Option with app theme colors
                   _buildTeamSelectionTile(
                     context,
                     match.team1,
                     match.team1 == selectedTeam,
-                        () {
+                    () {
                       setState(() {
                         selectedTeam = match.team1;
                       });
                     },
-                    Colors.blue,
+                    primaryColor,
                   ),
 
                   const SizedBox(height: 12),
 
-                  // Team 2 Option - Custom radio button style
+                  // Team 2 Option with app theme colors
                   _buildTeamSelectionTile(
                     context,
                     match.team2,
                     match.team2 == selectedTeam,
-                        () {
+                    () {
                       setState(() {
                         selectedTeam = match.team2;
                       });
@@ -595,113 +735,137 @@ class _VotingScreenState extends State<VotingScreen> {
 
                   const SizedBox(height: 32),
 
-                  // Buttons
+                  // Buttons row with app theme-consistent styling
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
+                      // Cancel button
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () {
                             Navigator.pop(context);
                           },
                           style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
+                            side: BorderSide(color: Colors.grey.shade400),
                           ),
-                          child: const Text('Cancel'),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(color: Colors.grey.shade700),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+
+                      const SizedBox(width: 12),
+
+                      // Save button with app theme colors
                       Expanded(
                         child: ElevatedButton(
                           onPressed: selectedTeam == null
                               ? null
                               : () async {
-                            Navigator.pop(context);
+                                  Navigator.pop(context);
 
-                            // Multiple safeguards against voting after cutoff
+                                  // Multiple safeguards against voting after cutoff
 
-                            // 1. Check if the match is now closed
-                            if (match.isVotingClosed()) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Voting period has ended while you were selecting. Your vote was not saved.'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                                  // 1. Check if the match is now closed
+                                  if (match.isVotingClosed()) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Voting period has ended while you were selecting. Your vote was not saved.'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
 
-                              // Redirect to voting details
-                              context.push(AppRoutes.buildVotingDetailsPath(match.id));
-                              return;
-                            }
+                                    // Redirect to voting details
+                                    context.push(
+                                        AppRoutes.buildVotingDetailsPath(
+                                            match.id));
+                                    return;
+                                  }
 
-                            // 2. Check if too much time has passed since the sheet was opened
-                            final timeElapsed = DateTime.now().difference(sheetOpenedTime);
-                            if (timeElapsed > const Duration(minutes: 5)) {
-                              // If more than 5 minutes passed, do another check to be safe
-                              if (match.isVotingClosed()) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Voting session timed out. Please try again.'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                                return;
-                              }
-                            }
+                                  // 2. Check if too much time has passed since the sheet was opened
+                                  final timeElapsed = DateTime.now()
+                                      .difference(sheetOpenedTime);
+                                  if (timeElapsed >
+                                      const Duration(minutes: 5)) {
+                                    // If more than 5 minutes passed, do another check to be safe
+                                    if (match.isVotingClosed()) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'Voting session timed out. Please try again.'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                  }
 
-                            // Show loading indicator
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Saving your vote...'),
-                                duration: Duration(seconds: 1),
-                              ),
-                            );
+                                  // Show loading indicator
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Saving your vote...'),
+                                      duration: Duration(seconds: 1),
+                                    ),
+                                  );
 
-                            // Save vote - the ViewModel will do a final cutoff check
-                            final success = await voteViewModel.saveVote(
-                              appState.user!.id,
-                              match.id,
-                              selectedTeam!,
-                            );
+                                  // Save vote - the ViewModel will do a final cutoff check
+                                  final success = await voteViewModel.saveVote(
+                                    appState.user!.id,
+                                    match.id,
+                                    selectedTeam!,
+                                  );
 
-                            // Show result
-                            if (success && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Vote saved successfully!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
+                                  // Show result
+                                  if (success && context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content:
+                                            Text('Vote saved successfully!'),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
 
-                              // Force reload to refresh the UI
-                              _loadData();
-                            } else if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Failed to save vote: ${voteViewModel.errorMessage}',
-                                  ),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          },
+                                    // Force reload to refresh the UI
+                                    _loadData();
+                                  } else if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Failed to save vote: ${voteViewModel.errorMessage}',
+                                        ),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
                           style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            backgroundColor: Colors.blue,
+                            // Explicitly using Colors.blue instead of primaryColor
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            backgroundColor: Theme.of(context).primaryColor,
+                            elevation: 0,
                           ),
-                          child: const Text('Save Vote'),
+                          child: const Text(
+                            'Save Vote',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
                 ],
               ),
             );
@@ -712,29 +876,41 @@ class _VotingScreenState extends State<VotingScreen> {
   }
 
   Widget _buildTeamSelectionTile(
-      BuildContext context,
-      String teamName,
-      bool isSelected,
-      VoidCallback onTap,
-      Color accentColor,
-      ) {
+    BuildContext context,
+    String teamName,
+    bool isSelected,
+    VoidCallback onTap,
+    Color accentColor,
+  ) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         decoration: BoxDecoration(
-          color: isSelected ? accentColor.withOpacity(0.1) : Colors.grey.shade100,
+          color:
+              isSelected ? accentColor.withOpacity(0.1) : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? accentColor : Colors.grey.shade300,
             width: isSelected ? 2 : 1,
           ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: accentColor.withOpacity(0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              : null,
         ),
         child: Row(
           children: [
+            // Radio button indicator
             Container(
-              width: 24,
-              height: 24,
+              width: 26,
+              height: 26,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isSelected ? accentColor : Colors.white,
@@ -744,20 +920,24 @@ class _VotingScreenState extends State<VotingScreen> {
                 ),
               ),
               child: isSelected
-                  ? Icon(
-                Icons.check,
-                size: 16,
-                color: Colors.white,
-              )
+                  ? const Icon(
+                      Icons.check,
+                      size: 18,
+                      color: Colors.white,
+                    )
                   : null,
             ),
-            const SizedBox(width: 12),
-            Text(
-              teamName,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? accentColor : Colors.black87,
+            const SizedBox(width: 14),
+
+            // Team name with optional team logo placeholder
+            Expanded(
+              child: Text(
+                teamName,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? accentColor : Colors.black87,
+                ),
               ),
             ),
           ],
